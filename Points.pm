@@ -1,7 +1,15 @@
+use strict;
+
 package Points;
 use Math::Trig qw( atan pi );
 use Math::Round qw( round );
 use List::Util qw( min );
+
+sub pointIsOnLine {
+    my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness) = @_; # point, line start, line end
+    my $det = ($x2 - $x1) * ($y0 - $y1) - ($y2 - $y1) * ($x0 - $x1);
+    return (abs($det) < $fuzziness);
+}
 
 sub findOnLine {
     my ($x1,$y1,$x2,$y2,$frac) = @_;
@@ -13,7 +21,16 @@ sub findOnLine {
     return @p;
 }
 
-sub perpDist {
+sub getDist {
+    my ($x1,$y1,$x2,$y2,$sides) = @_; # point 1, point 2, return all distances?
+    my $dx = $x1 - $x2; # preserving sign for rise/run
+    my $dy = $y1 - $y2;
+    my $d = sqrt($dx^2 + $dy^2); # squaring makes values absolute
+    if ($sides) { return $d,$dy,$dx; } # dist, rise, run
+    return $d;
+}
+
+sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
     my $dx = abs($x1 - $x2);
     my $dy = abs($y1 - $y2);
