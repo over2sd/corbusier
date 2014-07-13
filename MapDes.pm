@@ -36,12 +36,22 @@ sub genmap {
             push(@sqs,[$x,$y]);
         }
     }
+    my @irts;
+    my $lowindex = 0;
+    # find point closest to center
+    my @center = (floor($w / 2),floor($h / 2));
+    $lowindex = Points::getClosest(@center,undef,undef,@sqs);
+    foreach my $i (0 .. $#sqs) {     # link point to all other points
+        if ($i != $lowindex) {
+            
+        }
+    }
 =for pseudo
 place highways
     check distance from exit to join
-        2/3 of highways will go from exit to closest join
+        highways will go from exit to closest join
     add highway to route list
-    If joins do not connect, additional interior highways will connect joins to closest unconnected highways
+    Additional interior highways will connect joins to each other
         Save these highways to a separate list that will be added to the end of the routes, so other roads don\'t come off them.
 place secondaries
     foreach highway:

@@ -30,6 +30,22 @@ sub getDist {
     return $d;
 }
 
+sub getClosest {
+    my ($ox,$oy,$ex,$ey,@ptlist) = @_;
+    my $lowdex = 0;
+    my $lowdist = undef;
+    foreach my $i (0 .. $#ptlist) {
+        my $d = getDist(@ptlist[$i][0],@ptlist[$i][1],$ox,$oy);
+        if (@ptlist[$i][0] == $ex and @ptlist[$i][1] == $ey) {
+            continue;  # point is the excluded point
+        } elsif (not defined $lowdist or $d < $lowdist) {
+            $lowdist = $d;
+            $lowdex = $i;
+        }
+    }
+    return $lowdex;
+}
+
 sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
     my $dx = abs($x1 - $x2);
