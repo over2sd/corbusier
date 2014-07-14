@@ -5,17 +5,19 @@ use Points;
 
 use POSIX qw( floor );
 use List::Util qw( min );
+my $debug = 1;
 
 sub genmap {
+    if ($debug) { print "genmap(@_)\n"; }
     my ($hiw,$sec,$rat,$poi,$max,$w,$h) =  @_;
-    if ($hiw < 1) { return 0,undef; } # Have to have at least one highway leaving town.
+    if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
     my $numroutes = 0;
     my @sqs;
     my @rts;
     my @poi;
     my $mxj = $hiw > 10 ? 3 : 2;
     my $joins = floor(rand($mxj)) + 1; # choose number of intersections
-#    print "Joins: " . $joins . "\n";
+    if ($debug) { print "  Joins: " . $joins . "\n"; }
     $mxj = floor($w / 3);
     my $myj = floor($h / 3);
     foreach my $i (0 .. $joins - 1) { # choose joining point(s)
@@ -39,11 +41,12 @@ sub genmap {
     my @irts;
     my $lowindex = 0;
     # find point closest to center
+    # later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
     my @center = (floor($w / 2),floor($h / 2));
     $lowindex = Points::getClosest(@center,undef,undef,@sqs);
     foreach my $i (0 .. $#sqs) {     # link point to all other points
         if ($i != $lowindex) {
-            
+            push(@irts,$sqs[$i][0],$sqs[$i][1],$sqs[$lowindex][0],$sqs[$lowindex][1])
         }
     }
 =for pseudo
@@ -63,6 +66,9 @@ place secondaries
 place smaller roads
     checking for 
 =cut
+    foreach my $i (0 .. $#irts) {
+        push(@rts,$irts[$i]);
+    }
     return $numroutes,@rts;
 }
 
