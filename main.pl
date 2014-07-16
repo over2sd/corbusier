@@ -40,9 +40,19 @@ sub main {
         print "Using map seed $seed...\n";
         my ($nr,@routes) = MapDes::genmap($hiw,$sec,$rat,$poi,$max,$w,$h);
 #        my @poi = 
-        use Data::Dumper;
         print "- $nr routes\n";
+        foreach my $i (0 .. $#routes) {
+            print $routes[$i]->describe(1) . "\n";
+        }
         print Dumper @routes;
+    }
+    my $a = Segment->new(1,"AT&SF");
+    print "$a\n";
+    if ($a->can_move()) {
+        $a->set_ends(-1,1,-6,2);
+        print "The Intercept is: " . $a-> y_intercept() . "!\n";
+    } else {
+        print "Can't move this line. :(\n";
     }
 }
 
