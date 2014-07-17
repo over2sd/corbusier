@@ -252,11 +252,16 @@ sub set_ends {
     return $rv;
 }
 
+sub length {
+	my $self = shift;
+	return Points::getDist($self->ox(),$self->oy(),$self->ex(),$self->ey());
+}
+
 sub describe {
     my ($self,$vv,$showz) = @_;
     unless (defined $vv) { $vv = 0 };
     if ($vv == 0) { return $self->ox(),$self->oy(),$self->oz(),$self->ex(),$self->ey(),$self->ez(); } # 0
-    my $bio = "I am a" . ( $self->can_move() ? " " : "n im") . "movable line segment from (" . $self->ox() . "," . $self->oy() . ($showz ? "," . $self->oz() : "" ) . ") to (" .  $self->ex() . "," . $self->ey() . ($showz ? "," . $self->oz() : "" ) . ")."; # 1
+    my $bio = "I am ". $self->name() . ", a" . ( $self->can_move() ? " " : "n im") . "movable line segment from (" . $self->ox() . "," . $self->oy() . ($showz ? "," . $self->oz() : "" ) . ") to (" .  $self->ex() . "," . $self->ey() . ($showz ? "," . $self->oz() : "" ) . ")."; # 1
     if ($vv > 1) { $bio = "$bio I have a slope of " . $self->slope() . "."; # 2
         if ($vv > 2) { $bio = "$bio If I am long enough in the right direction, I cross 0 at " . $self->y_intercept() . "."; # 3
             if ($vv > 3) {
@@ -276,9 +281,10 @@ use List::Util qw( min );
 my $debug = 1;
 
 sub pointIsOnLine { # Don't remember the source of this algorithm, but it was given as a formula.
-    if ($debug) { print "pointIsOnLine(@_)\n"; }
-    my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness) = @_; # point, line start, line end
+    if ($debug) { print "pointIsOnLine(@_)"; }
+    my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness) = @_; # point, line start, line end, max determinant
     my $det = ($x2 - $x1) * ($y0 - $y1) - ($y2 - $y1) * ($x0 - $x1);
+	if ($debug) { print "=>$det\n"; }
     return (abs($det) < $fuzziness);
 }
 
@@ -321,7 +327,7 @@ sub getClosest {
         if (defined $ex and defined $ey and $ptlist[$i]->x() == $ex and $ptlist[$i]->y() == $ey) {
             # do nothing  # point is the excluded point
         } elsif (not defined $lowdist or $d < $lowdist) {
-			print "Low: " . (defined $lowdist ? $lowdist : "undef") . "(#$lowdex) => $d (#$i) - - - $dy/$dx\n";
+			if ($debug > 7) { print "Low: " . (defined $lowdist ? $lowdist : "undef") . "(#$lowdex) => $d (#$i) - - - $dy/$dx\n"; }
            $lowdist = $d;
             $lowdex = $i;
         }
@@ -330,11 +336,12 @@ sub getClosest {
 }
 
 sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
-    if ($debug) { print "perpDist(@_)\n"; }
+    if ($debug > 1) { print "perpDist(@_)\n"; }
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
-    my $dx = abs($x1 - $x2);
-    my $dy = abs($y1 - $y2);
+    my $dx = $x2 - $x1;
+    my $dy = $y2 - $y1;
     my $d = (abs($dy*$x0 - $dx*$y0 - $x1*$y2 + $x2*$y1) / sqrt($dx**2 + $dy**2));
+#	print "($d)";
     return $d;
 }
 

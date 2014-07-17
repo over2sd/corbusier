@@ -46,7 +46,7 @@ sub main {
         foreach my $i (0 .. $#routes) {
             print $routes[$i]->describe(1) . "\n";
         }
-        my $svg = MapDraw::formSVG(\@routes);
+        my $svg = MapDraw::formSVG($w,$h,\@routes);
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
         print "\n";
