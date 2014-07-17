@@ -3,7 +3,7 @@ use strict;
 
 use Points;
 use MapDes;
-#use MapDraw;
+use MapDraw;
 
 use Getopt::Long;
 
@@ -18,10 +18,12 @@ sub main {
     my $seed = 0; # Random seed/map number
     my $w = 800; # Width of image
     my $h = 600; # Height of image
+    my $fn = 'output.svg'; # Filename of map
     GetOptions(
         'gui' => \$gui,
         'depth|d=i' => \$depth,
         'highways|exits|e=i' => \$hiw,
+        'file|f=s' => \$fn,
         'map|m=i' => \$seed,
         'poimode|p' => \$poi,
         'ratio|r=i' => \$rat,
@@ -44,15 +46,10 @@ sub main {
         foreach my $i (0 .. $#routes) {
             print $routes[$i]->describe(1) . "\n";
         }
-        print Dumper @routes;
-    }
-    my $a = Segment->new(1,"AT&SF");
-    print "$a\n";
-    if ($a->can_move()) {
-        $a->set_ends(-1,1,-6,2);
-        print "The Intercept is: " . $a-> y_intercept() . "!\n";
-    } else {
-        print "Can't move this line. :(\n";
+        my $svg = MapDraw::formSVG(\@routes);
+        my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
+        if ($result != 0) { print "Map could not be saved: $errstr"; }
+        print "\n";
     }
 }
 

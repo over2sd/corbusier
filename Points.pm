@@ -1,5 +1,87 @@
 use warnings;
 use strict;
+############################ Vertex (point) Library ############################
+package Vertex;
+
+sub new {
+	my ($class,$i,$n,$x1,$y1,$z1) = @_;
+	my $self = {
+        identity => ($i or 0),
+        moniker => ($n or 'Unnamed'),
+        origin_x => ($x1 or 0),
+        origin_y => ($y1 or 0),
+        origin_z => ($z1 or 0),
+        immobile => 0
+	};
+	bless $self,$class;
+	return $self;
+}
+
+sub id {
+	my ($self,$value) = @_;
+	$self->{identity} = $value if defined($value);
+	return $self->{identity};
+}
+
+sub name {
+	my ($self,$value) = @_;
+	$self->{moniker} = $value if defined($value);
+	return $self->{moniker};
+}
+
+sub x {
+	my ($self,$value) = @_;
+	$self->{origin_x} = $value if (defined($value) and not $self->{immobile});
+	return $self->{origin_x};
+}
+
+sub y {
+	my ($self,$value) = @_;
+	$self->{origin_y} = $value if (defined($value) and not $self->{immobile});
+	return $self->{origin_y};
+}
+
+sub z {
+	my ($self,$value) = @_;
+	$self->{origin_z} = $value if (defined($value) and not $self->{immobile});
+	return $self->{origin_z};
+}
+
+sub move {
+	my ($self,$x,$y,$z) = @_;
+    if ($self->{immobile}) {
+        warn "Trying to move immobile vertex $self";
+        return 86;
+    }
+    if (not defined $x or not defined $y) { return 1; }
+    $self->{origin_x} = $x;
+    $self->{origin_y} = $y;
+    if (defined $z) { $self->{origin_z} = $z; }
+    return 0;
+}
+
+sub can_move {
+	my ($self,$value) = @_;
+	if (defined $value) {
+        $self->{immobile} = ($value == 0 ? 1 : 0);
+    }
+    if ($self->{immobile}) { return 0; }
+	return 1;
+}
+
+sub immobilize {
+	my $self = shift;
+	$self->{immobile} = 1;
+	return 0;
+}
+
+sub describe {
+    my ($self,$vv,$showz) = @_;
+    unless (defined $vv) { $vv = 0 };
+    if ($vv == 0) { return $self->x(),$self->y(),$self->z(); } # 0
+    my $bio = "I am a" . ( $self->can_move() ? " " : "n im") . "movable point from (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
+    return $bio;
+}
 
 ############################### Segment Library ################################
 package Segment;
@@ -51,37 +133,37 @@ sub y_intercept {
 
 sub ox {
 	my ($self,$value) = @_;
-	$self->{origin_x} = $value if defined($value);
+	$self->{origin_x} = $value if (defined($value) and not $self->{immobile});
 	return $self->{origin_x};
 }
 
 sub oy {
 	my ($self,$value) = @_;
-	$self->{origin_y} = $value if defined($value);
+	$self->{origin_y} = $value if (defined($value) and not $self->{immobile});
 	return $self->{origin_y};
 }
 
 sub oz {
 	my ($self,$value) = @_;
-	$self->{origin_z} = $value if defined($value);
+	$self->{origin_z} = $value if (defined($value) and not $self->{immobile});
 	return $self->{origin_z};
 }
 
 sub xl {
 	my ($self,$value) = @_;
-	$self->{distance_x} = $value if defined($value);
+	$self->{distance_x} = $value if (defined($value) and not $self->{immobile});
 	return $self->{distance_x};
 }
 
 sub yl {
 	my ($self,$value) = @_;
-	$self->{distance_y} = $value if defined($value);
+	$self->{distance_y} = $value if (defined($value) and not $self->{immobile});
 	return $self->{distance_y};
 }
 
 sub zl {
 	my ($self,$value) = @_;
-	$self->{distance_z} = $value if defined($value);
+	$self->{distance_z} = $value if (defined($value) and not $self->{immobile});
 	return $self->{distance_z};
 }
 
@@ -109,7 +191,7 @@ sub move {
     if (not defined $x or not defined $y) { return 1; }
     $self->{origin_x} = $x;
     $self->{origin_y} = $y;
-    if (defined $z) { $self->{distance_z} = $z; }
+    if (defined $z) { $self->{origin_z} = $z; }
     return 0;
 }
 
@@ -216,22 +298,31 @@ sub getDist {
     my ($x1,$y1,$x2,$y2,$sides) = @_; # point 1, point 2, return all distances?
     my $dx = $x1 - $x2; # preserving sign for rise/run
     my $dy = $y1 - $y2;
-    my $d = sqrt($dx^2 + $dy^2); # squaring makes values absolute
+    my $d = sqrt($dx**2 + $dy**2); # squaring makes values absolute
+	if ($debug > 1) { print "In: $x1,$y1 - $x2,$y2 -- $dy/$dx :: $d\n"; }
     if ($sides) { return $d,$dy,$dx; } # dist, rise, run
     return $d;
 }
 
 sub getClosest {
-   if ($debug > 1) { no warnings 'uninitialized'; print "getClosest(@_)\n"; }
-    my ($ox,$oy,$ex,$ey,@ptlist) = @_; # origin, excluded point, AoA list of points
+   if ($debug > 1) { print "getClosest(@_)\n"; }
+    my ($ox,$oy,$ptlr,%exargs) = @_; # origin, excluded point, list of vertices
+	my @ptlist = @$ptlr;
+	my $ex; my $ey;
+	if (defined $exargs{'exclude'}) {
+		my $xv = $exargs{'exclude'};
+		$ex = $xv->x();
+		$ey = $xv->y();
+	}
     my $lowdex = 0;
     my $lowdist = undef;
     foreach my $i (0 .. $#ptlist) {
-        my $d = getDist($ptlist[$i][0],$ptlist[$i][1],$ox,$oy,0);
-        if (defined $ex and defined $ey and $ptlist[$i][0] == $ex and $ptlist[$i][1] == $ey) {
+        my ($d,$dy,$dx) = getDist($ptlist[$i]->x(),$ptlist[$i]->y(),$ox,$oy,1);
+        if (defined $ex and defined $ey and $ptlist[$i]->x() == $ex and $ptlist[$i]->y() == $ey) {
             # do nothing  # point is the excluded point
         } elsif (not defined $lowdist or $d < $lowdist) {
-            $lowdist = $d;
+			print "Low: " . (defined $lowdist ? $lowdist : "undef") . "(#$lowdex) => $d (#$i) - - - $dy/$dx\n";
+           $lowdist = $d;
             $lowdex = $i;
         }
     }
@@ -243,7 +334,7 @@ sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
     my $dx = abs($x1 - $x2);
     my $dy = abs($y1 - $y2);
-    my $d = (abs($dy*$x0 - $dx*$y0 - $x1*$y2 + $x2*$y1) / sqrt($dx^2 + $dy^2));
+    my $d = (abs($dy*$x0 - $dx*$y0 - $x1*$y2 + $x2*$y1) / sqrt($dx**2 + $dy**2));
     return $d;
 }
 
@@ -285,6 +376,23 @@ sub getAHeading {
         $h -= 360;
     }
     return $h;
+}
+
+sub closestCardinal {
+	my ($x,$y,$w,$h) = @_; # point, w/h of field
+	if (not defined $h or not defined $w or not defined $y or not defined $x) { warn "closestCardinal takes 4 arguments: x,y,width,height"; return -1; }
+	my @trials = (Vertex->new(0,'',int($w/2),0),Vertex->new(0,'',$w,0),Vertex->new(0,'',$w,int($h/2)),Vertex->new(0,'',$w,$h),Vertex->new(0,'',int($w/2),$h),Vertex->new(0,'',0,$h),Vertex->new(0,'',0,int($h/2)),Vertex->new(0,'',0,0));
+	my $d;
+	my $cd = -2;
+	foreach my $i (0 .. 7) {
+		my $id = getDist($trials[$i]->x(),$trials[$i]->y(),$x,$y);
+		if (not defined $d or $id < $d) {
+			$cd = $i; $d = $id;
+		} elsif ($id == $d) {
+			if (int(rand(2))) { if ($debug) { print "Replacing"; }} else { $cd = $i; }; # randomly decide whether to replace equivalent values.
+		}
+	}
+	return $cd; # returns a cardinal direction, clockwise from 0 (N or top) to 7 (NW or topleft)
 }
 
 1;
