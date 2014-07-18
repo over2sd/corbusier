@@ -274,9 +274,10 @@ sub describe {
 
 ############################### Points Library #################################
 package Points;
+use List::Util qw( min );
 use Math::Trig qw( atan pi );
 use Math::Round qw( round );
-use List::Util qw( min );
+use POSIX qw( floor );
 
 my $debug = 1;
 
@@ -312,7 +313,7 @@ sub getDist {
 
 sub getClosest {
    if ($debug > 1) { print "getClosest(@_)\n"; }
-    my ($ox,$oy,$ptlr,%exargs) = @_; # origin, excluded point, list of vertices
+    my ($ox,$oy,$ptlr,%exargs) = @_; # origin, reference of list of vertices, hash of extra arguments
 	my @ptlist = @$ptlr;
 	my $ex; my $ey;
 	if (defined $exargs{'exclude'}) {
@@ -340,6 +341,7 @@ sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
     my $dx = $x2 - $x1;
     my $dy = $y2 - $y1;
+	return 0 if ($dx == 0 and $dy == 0);
     my $d = (abs($dy*$x0 - $dx*$y0 - $x1*$y2 + $x2*$y1) / sqrt($dx**2 + $dy**2));
 #	print "($d)";
     return $d;
@@ -388,7 +390,7 @@ sub getAHeading {
 sub closestCardinal {
 	my ($x,$y,$w,$h) = @_; # point, w/h of field
 	if (not defined $h or not defined $w or not defined $y or not defined $x) { warn "closestCardinal takes 4 arguments: x,y,width,height"; return -1; }
-	my @trials = (Vertex->new(0,'',int($w/2),0),Vertex->new(0,'',$w,0),Vertex->new(0,'',$w,int($h/2)),Vertex->new(0,'',$w,$h),Vertex->new(0,'',int($w/2),$h),Vertex->new(0,'',0,$h),Vertex->new(0,'',0,int($h/2)),Vertex->new(0,'',0,0));
+	my @trials = (Vertex->new(0,'',int($w/2),0),Vertex->new(0,'',int($w * 0.8),0),Vertex->new(0,'',$w,int($h/5)),Vertex->new(0,'',$w,int($h/2)),Vertex->new(0,'',int($w),int($h * 0.8)),Vertex->new(0,'',int($w * 0.8),$h),Vertex->new(0,'',int($w/2),$h),Vertex->new(0,'',int($w/5),$h),Vertex->new(0,'',0,$h),Vertex->new(0,'',0,int($h * 0.8)),Vertex->new(0,'',0,int($h/2)),Vertex->new(0,'',0,int($h/5)),Vertex->new(0,'',0,0));
 	my $d;
 	my $cd = -2;
 	foreach my $i (0 .. 7) {
@@ -399,7 +401,52 @@ sub closestCardinal {
 			if (int(rand(2))) { if ($debug) { print "Replacing"; }} else { $cd = $i; }; # randomly decide whether to replace equivalent values.
 		}
 	}
-	return $cd; # returns a cardinal direction, clockwise from 0 (N or top) to 7 (NW or topleft)
+	return $cd; # returns a cardinal direction, clockwise from 0 (N or top) to 11 (NNW or topleft-top)
+}
+
+sub costlyRectify {
+    my ($ar,$v) = @_;
+    my @existing = @$ar;
+    my @xs;
+    my @ys;
+    foreach my $i (0 .. $#existing) {
+        push(@xs,$existing[$i]->x());
+		push(@ys,$existing[$i]->y());
+    }
+	my $basex = min(@xs) - 20;
+	my $topx = max(@xs) + 20;
+	my $basey = min(@ys) - 20;
+	my $topy = max(@ys) + 20;
+	my @xpoints = ($basex .. $topx);
+	my @ypoints = ($basey .. $topy);
+    foreach my $i (0 .. $#existing) {
+		splice(@xpoints,$existing[$i]->x() - 5,10);
+		splice(@ypoints,$existing[$i]->y() - 5,10);
+    }
+	use Data::Dumper;
+	print Dumper @xpoints;
+	$v->move(0,0);
+	print "This function isn't finished! Finish it!\n";
+	exit(-99);
+	return $v;
+}
+
+sub placePoint {
+	my ($v,$xrange,$xbase,$yrange,$ybase,$listref,$mindist,$maxtries) = @_;
+	my $d = 0;
+	my $j = 0;
+    do {
+        my $x = floor(rand(abs($xrange))) + $xbase;
+        my $y = floor(rand(abs($yrange))) + $ybase;
+        $v->move($x,$y);
+        $d = $mindist + 1;
+        foreach my $ii (@$listref) {
+            $d = min($d,Points::getDist($ii->x(),$ii->y(),$v->x(),$v->y()));
+        }
+        if ($j > 5) { $v->move(costlyRectify($listref,$v)); $x = $v->x(); $y = $v->y(); }
+		$j++;
+    } until ($d > $mindist or $j > $maxtries); # minimum distance between squares
+	return ($d > $mindist);
 }
 
 1;
