@@ -1,0 +1,3 @@
+Add a mode for generating map using points of interest instead of branching from central point (POI mode)
+Add a mode for generating map using crystal growth scheme (crystal mode)
+Add an option for branchmap to generate a ring for town center instead of a group of random points (sub ringSquares)
