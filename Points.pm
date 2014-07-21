@@ -275,11 +275,12 @@ sub describe {
 ############################### Points Library #################################
 package Points;
 use List::Util qw( min );
-use Math::Trig qw( atan pi );
+use Math::Trig qw( atan pi acos );
 use Math::Round qw( round );
 use POSIX qw( floor );
 
 my $debug = 1;
+my @cornerbearings = (0,0,0,0);
 
 sub pointIsOnLine { # Don't remember the source of this algorithm, but it was given as a formula.
     if ($debug) { print "pointIsOnLine(@_)"; }
@@ -370,21 +371,40 @@ sub chooseAHeading {
     return $bearing;
 }
 
+#This function is not producing correct results. :(
 sub getAHeading {
     if ($debug) { print "getAHeading(@_)\n"; }
-    my ($dx,$dy,$offset,$whole) = @_;
+    my ($dx,$dy,$offset,$whole,$relative) = @_;
     if (not defined $whole) { $whole = 0; }
+    if (not defined $relative) { $relative = 1; }
     my $h = atan($dx,$dy)*180/pi;
     $h = $h + ($offset or 0);
     if ($whole) {
         $h = round($h)
     }
-    if ($h < -180) {
+	if (not $relative) {
+		return $h + 180; # absolute heading (0-360)
+    } elsif ($h < -180) {
         $h += 360;
     } elsif ($h > 180) {
         $h -= 360;
     }
     return $h;
+}
+
+# after wiki/Law_of_cosines
+sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
+    if ($debug) { print "getAzimuth(@_)\n"; }
+	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
+	if (not defined $whole) { $whole = 0; }
+	my $dista = $cx;
+	my $distb = getDist($cx,$cy,$tx,$ty,0);
+	my $distc = getDist($cx,0,$tx,$ty,0);
+	print "Triangle sides: $dista, $distb, $distc\n";
+	my $angle = acos(($dista**2 + $distb**2 - $distc**2)/(2 * $dista * $distb));
+	if ($tx < $cx) { $angle = 360 - $angle; } # more than 180 degrees azimuth if target in Q II/III from center.
+	if ($whole) { $angle = floor($angle + 0.5); }
+	return $angle;
 }
 
 sub closestCardinal {
@@ -447,6 +467,17 @@ sub placePoint {
 		$j++;
     } until ($d > $mindist or $j > $maxtries); # minimum distance between squares
 	return ($d > $mindist);
+}
+
+sub setCornerHeadings {
+	my ($w,$h) = @_;
+	my @c = ($w / 2,$h / 2); # center point
+	$cornerbearings[0] = getAzimuth($c[0],$c[1] ,0,0,1);
+	$cornerbearings[1] = getAzimuth($c[0],$c[1] ,$w,0,1);
+	$cornerbearings[2] = getAzimuth($c[0],$c[1] ,$w,$h,1);
+	$cornerbearings[3] = getAzimuth($c[0],$c[1] ,0,$h,1);
+	print "Your corner bearings are: $cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3].\n";
+	return 0;
 }
 
 1;
