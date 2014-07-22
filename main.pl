@@ -4,11 +4,12 @@ use strict;
 use Points;
 use MapDes;
 use MapDraw;
+use Common;
 
 use Getopt::Long;
 
 sub mapSeed {
-		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed) = @_;
+		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed,$offsetx,$offsety) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
         my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height);
@@ -20,6 +21,8 @@ sub mapSeed {
 		my @boxen;
 		my %exargs;
 		if ($showtheseed) { $exargs{'seed'} = $seed; }
+		if ($offsetx) { $exargs{'xoff'} = $offsetx; }
+		if ($offsety) { $exargs{'yoff'} = $offsety; }
         my $out = MapDraw::formSVG($width,$height,\@routes,\@boxen,%exargs);
 		return $out;
 }
@@ -37,9 +40,14 @@ sub main {
     my $h = 600; # Height of image
     my $fn = 'output.svg'; # Filename of map
 	my $disp = 0; # display seed on map (debug function)
+	my @seedlist; # list of seeds, read from file
+	my $listfn = ''; # filename for list of seeds
+	my $showhelp = 0;
 							$disp = 1; # for development. TODO: Remove this line when done tweaking generator
     GetOptions(
+		'help' => \$showhelp,
         'gui' => \$gui,
+		'comp|c=s' => \$listfn,
         'depth|d=i' => \$depth,
         'highways|exits|e=i' => \$hiw,
         'file|f=s' => \$fn,
@@ -52,27 +60,43 @@ sub main {
         'w=i' => \$w,
         'h=i' => \$h
         );
+	if ($showhelp) {
+		print "Help not yet written. Sorry. Smack the dev(s).\n";
+		exit(0);
+	}
     if ($seed < 0) { $seed =  time }
     if (!$max) { $max = $hiw * $sec; }
     if ($gui) {
+# most other options are ignored, if gui will be shown.
 #        use MapGUI;
         showGUI();
     } else {
 		my $svg = '';
-#		 if (@seedlist) {
+		Points::setCornerHeadings($w,$h); # set boundaries for use multiple times.
+		if ($listfn ne '') {
+			@seedlist = Common::loadSeedsFrom($listfn);
+		}
+		 if (@seedlist) {
 # Start of seed loop
-#			my @svglist;
-#			foreach my $seed (@seedlist) {
-#				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp);
-#				push(@svglist,$svgstring);
+			my @svglist;
+			my ($x,$y) = (0,0);
+			my $width = Common::selectWidth($w,scalar(@seedlist));
+			foreach my $seed (@seedlist) {
+				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,$x,$y);
+				push(@svglist,$svgstring);
+				$x += $w;
+				if ($x >= $width) {
+					$x = 0;
+					$y += $h;
+				}
 # End of seed loop
-#			}
-#			foreach my $add (@svglist) {
-#				$svg = "$svg$add\n";
-#			}
-#		} else {
+			}
+			foreach my $add (@svglist) {
+				$svg = "$svg$add\n";
+			}
+		} else {
 			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp);
-#		}
+		}
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
         print "\n";

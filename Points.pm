@@ -371,8 +371,33 @@ sub chooseAHeading {
     return $bearing;
 }
 
-#This function is not producing correct results. :(
 sub getAHeading {
+    if ($debug) { print "getAHeading(@_)\n"; }
+	# Temporary function for use until I can figure out why the trig-based algorithm isn't giving valid results
+	# This function extrapolates bearing based on relationship to known bearing (slope 1 = 45 degrees) and may not be accurate.
+	# TODO: Fix this!!!
+	my ($dx,$dy,$whole,$relative) = @_;
+    if (not defined $whole) { $whole = 0; }
+    if (not defined $relative) { $relative = 0; }
+#	print "Given $dy/$dx:";
+	if ($dx == 0) { return ($dy > 0 ? 180 : 0); } # vertical line has 0 or 180 degree heading. identical point has heading of 0.
+	if ($dy == 0) { return ($dx > 0 ? 90 : ($relative ? -90 : 270)); } # horizontal line is 90 or 270/-90 degree heading
+	my $h = $dy / $dx * 45; # slope of 1 = 45 degree heading
+#	print " $h=>";
+	if ($dx < 0) {
+		$h = ($relative ? $h - 90 : ($dy < 0 ? 360 - $h : 180 - $h));
+#		print " $h->";
+	} else {
+		$h = 90 + $h;
+#		print " $h+>";
+	}
+	if ($whole) { $h = floor($h + 0.5); }
+#	print " $h\n";
+	return $h;
+}
+
+#This function is not producing correct results. :(
+sub oldGetAHeading {
     if ($debug) { print "getAHeading(@_)\n"; }
     my ($dx,$dy,$offset,$whole,$relative) = @_;
     if (not defined $whole) { $whole = 0; }
@@ -394,9 +419,11 @@ sub getAHeading {
 
 # after wiki/Law_of_cosines
 sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
-    if ($debug) { print "getAzimuth(@_)\n"; }
+    if ($debug > 1) { print "getAzimuth(@_)\n"; }
 	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
 	if (not defined $whole) { $whole = 0; }
+	return getAHeading($tx-$cx,$ty-$cy,$whole,0);
+	# NOTE: Function doesn't continue past previous line!!!
 	my $dista = $cx;
 	my $distb = getDist($cx,$cy,$tx,$ty,0);
 	my $distc = getDist($cx,0,$tx,$ty,0);
@@ -452,31 +479,39 @@ sub costlyRectify {
 }
 
 sub placePoint {
+    if ($debug > 5) { print "placePoint(@_)\n"; }
 	my ($v,$xrange,$xbase,$yrange,$ybase,$listref,$mindist,$maxtries) = @_;
 	my $d = 0;
 	my $j = 0;
     do {
         my $x = floor(rand(abs($xrange))) + $xbase;
         my $y = floor(rand(abs($yrange))) + $ybase;
+		#print "\nTrying ($x,$y)...";
         $v->move($x,$y);
         $d = $mindist + 1;
         foreach my $ii (@$listref) {
             $d = min($d,Points::getDist($ii->x(),$ii->y(),$v->x(),$v->y()));
         }
-        if ($j > 5) { $v->move(costlyRectify($listref,$v)); $x = $v->x(); $y = $v->y(); }
+		#print "Nearest at least $d units away...";
+        if ($j > 5) { $v->move(costlyRectify($listref,$v)); $x = $v->x(); $y = $v->y(); print "Moving old points"; }
 		$j++;
     } until ($d > $mindist or $j > $maxtries); # minimum distance between squares
+	#print ".end dist: $d (" . ( $d > $mindist ? "true" : "false") . ")\n";
 	return ($d > $mindist);
 }
 
 sub setCornerHeadings {
 	my ($w,$h) = @_;
 	my @c = ($w / 2,$h / 2); # center point
-	$cornerbearings[0] = getAzimuth($c[0],$c[1] ,0,0,1);
-	$cornerbearings[1] = getAzimuth($c[0],$c[1] ,$w,0,1);
-	$cornerbearings[2] = getAzimuth($c[0],$c[1] ,$w,$h,1);
-	$cornerbearings[3] = getAzimuth($c[0],$c[1] ,0,$h,1);
-	print "Your corner bearings are: $cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3].\n";
+	$cornerbearings[0] = getAzimuth($c[0],$c[1] ,0,0,0);
+#	print "\nN: " . getAzimuth($c[0],$c[1] ,$c[0],0,1);
+	$cornerbearings[1] = getAzimuth($c[0],$c[1] ,$w,0,0);
+#	print "\nE: " . getAzimuth($c[0],$c[1] ,$w,$c[1],1);
+	$cornerbearings[2] = getAzimuth($c[0],$c[1] ,$w,$h,0);
+#	print "\nS: " . getAzimuth($c[0],$c[1] ,$c[0],$h,1);
+	$cornerbearings[3] = getAzimuth($c[0],$c[1] ,0,$h,0);
+#	print "\nW: " . getAzimuth($c[0],$c[1] ,0,$c[1],1);
+	print "Your corner bearings are set to: $cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3].\n";
 	return 0;
 }
 
