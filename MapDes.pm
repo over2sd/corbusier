@@ -31,16 +31,23 @@ sub moveIfNear {
 	# TODO: Sanity checks go here
 	my $altered = 0;
 	my $endpoint = $end_index;
+	if ($debug > 1) { print "Comparing length " . sprintf("%.2f",$line->length()) . " to points... "; }
 	foreach my $j (0 .. $#checklist) {
 		if ($j != $end_index and $j != $origin_index) {
 			my $p = $checklist[$j];
 			# check to see if line passes near a closer point:
 			my $distance = Points::perpDist($p->x(),$p->y(),$line->ox(),$line->oy(),$line->ex(),$line->ey());
 			if ($distance < $boundary) { # if another line ends close to this one, move our endpoint to that line's origin if the distance is shorter
-				if ($line->length() > Points::getDist($line->ox(),$line->oy(),$p->x(),$p->y())) {
-					print "~";
+				my $q = Points::getDist($line->ox(),$line->oy(),$p->x(),$p->y());
+				if ($q and $line->length() > $q) {
+					if ($debug > 2) { print "Moving " . $line->ex() . "," . $line->ey() . " to " . $p->x() . "," . $p->y() . "\n"; } else { print "~"; }
 					$endpoint = $j;
+					$altered = 1;
+				} elsif ($debug > 2) {
+					printf(" %i,%i :%.2f; ",$p->x(),$p->y(),$q);
 				}
+			} elsif ($debug > 2) {
+				printf(" %d,%d - Distance: %.2f; ",$p->x(),$p->y(),$distance);
 			}
 		}
 	}
@@ -83,12 +90,14 @@ sub branchmap {
 		   my $line = Segment->new($numroutes);
 		   $numroutes += 1;
 			# This line is to prepare for comparisons:
-			$line->set_ends($sqs[$lowindex]->x(),$sqs[$i]->x(),$sqs[$lowindex]->y(),$sqs[$i]->y());
+			$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
+			$line->name(sprintf("Road%d",$i));
 			moveIfNear($line,$i,$lowindex,20,@sqs);
 			$line->immobilize();
 #			  Save these highways to a separate list that will be added to the end of the routes, so other roads don't come off them.
 		   push(@irts,$line)
 		}
+		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
 	}
 # place highways
 # count junctions
@@ -181,7 +190,7 @@ sub branchmap {
 			push(@exits,$e);
 			my $line = Segment->new($numroutes);
 			$line->set_ends($e->x(),$v->x(),$e->y(),$v->y());
-			moveIfNear($line,-1,-1,100,@sqs);
+			moveIfNear($line,-1,-1,85,@sqs);
 			$numroutes += 1;
 #	add highway to route list
 			push(@rts,$line)

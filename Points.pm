@@ -306,6 +306,8 @@ sub getDist {
     my ($x1,$y1,$x2,$y2,$sides) = @_; # point 1, point 2, return all distances?
     my $dx = $x1 - $x2; # preserving sign for rise/run
     my $dy = $y1 - $y2;
+	unless ($dx or $dy) { return ($sides ? (0,0,0) : 0); } # same point
+#	unless ($dx and $dy) { return ($dx ? $dx : $dy); } # horiz/vert line ## can't do this efficiently with sides variable
     my $d = sqrt($dx**2 + $dy**2); # squaring makes values absolute
 	if ($debug > 1) { print "In: $x1,$y1 - $x2,$y2 -- $dy/$dx :: $d\n"; }
     if ($sides) { return $d,$dy,$dx; } # dist, rise, run
