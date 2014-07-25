@@ -79,6 +79,7 @@ sub branchmap {
 			if ($debug) { print "!@%&"; }
 		}
 	}
+	print "Squares: " . scalar(@sqs) . "\n";
 	my @irts;
 	my $lowindex = 0;
 	# find point closest to center
@@ -99,16 +100,26 @@ sub branchmap {
 		}
 		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
 	}
-# place highways
+# place highways #############
+	print "\nPlacing highways..";
 # count junctions
 	my @joins;
 	my $divisor = $#sqs;
-	if ($divisor == 1) { # exactly two junctions
+	if ($divisor < 2) { # fewer than three junctions
 		$divisor++;
 	}
 # If more than one highway per join, grow highways with weight toward even spacing around the map:
-	print "\nPlacing highways..";
-	if ($divisor >= $hiw) {
+	print "Dividing $hiw among $divisor junctions...";
+	if ($divisor < $hiw) {
+		my @exits;
+		my $bearingrange = 360 / $hiw;
+		my $bearingbase = 0;
+		while (scalar @exits < $hiw) {
+			my $bearing = $bearingbase + rand($bearingrange);
+			my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
+			print $ev->describe(1);
+			exit(0);
+		}
 		print "Function incomplete!\n";
 	} else { # not ($divisor >= $hiw)
 # If fewer than one highway per join, just grow a highway from each to the nearest edge:
@@ -116,7 +127,7 @@ sub branchmap {
 		my @edges = ();
 		foreach my $i (0 .. $#sqs) {
 			# if more than two, ignore the one most central from list
-			if ($i == $lowindex and $#sqs != 1) { print "'"; next; }
+			if ($i == $lowindex and $#sqs > 1) { print "'"; next; }
 			print ".";
 			my $v = $sqs[$i];
 #		print ($v  or "undef") . " ";

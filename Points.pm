@@ -79,7 +79,7 @@ sub describe {
     my ($self,$vv,$showz) = @_;
     unless (defined $vv) { $vv = 0 };
     if ($vv == 0) { return $self->x(),$self->y(),$self->z(); } # 0
-    my $bio = "I am a" . ( $self->can_move() ? " " : "n im") . "movable point from (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
+    my $bio = "I am " . $self->name() . ", a" . ( $self->can_move() ? " " : "n im") . "movable point at (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
     return $bio;
 }
 
@@ -502,6 +502,7 @@ sub placePoint {
 	return ($d > $mindist);
 }
 
+my $cornershavebeenset = 0;
 sub setCornerHeadings {
 	my ($w,$h) = @_;
 	my @c = ($w / 2,$h / 2); # center point
@@ -513,8 +514,68 @@ sub setCornerHeadings {
 #	print "\nS: " . getAzimuth($c[0],$c[1] ,$c[0],$h,1);
 	$cornerbearings[3] = getAzimuth($c[0],$c[1] ,0,$h,0);
 #	print "\nW: " . getAzimuth($c[0],$c[1] ,0,$c[1],1);
+	$cornershavebeenset = 1;
 	print "Your corner bearings are set to: $cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3].\n";
 	return 0;
+}
+
+=item slopeFromAzimuth()
+	Given an azimuth (absolute bearing from 0=N), returns a list containing the slope of the line (or undef for vertical) and which edge the azimuth intersects N=0; W=3.
+	Use of this function to find an edge assumes that setCornerHeadings has previously been called with the size of your current field. If the corner headings have not been set, it will return "unknown" for the edge value.
+=cut
+sub slopeFromAzimuth {
+	my $az = shift;
+	$az = 0 if ($az == 360);
+	if ($az == 0 or $az == 180) { # vertical line
+		return (undef,($az ? 2 : 0));
+	}
+	my $slope = ($az > 180 ? $az - 180 : $az);
+	if ($slope >= 45 and $slope <= 135) {	# accurate between m=1 and m=-1
+#		print ":!:";
+		$slope = -$slope / 45 + 2;
+	}	else {
+#		print "<$slope>";
+		my $sloperise = ($slope < 45 ? 45 : -45);
+		my $sloperun = ($slope < 45 ? $slope : 180 - $slope);
+		$slope = $sloperise / $sloperun;
+#		print "$slope = $sloperise / $sloperun\n";
+	}
+	my $edge = ($az < $cornerbearings[0] ? ($az < $cornerbearings[3] ? ($az < $cornerbearings[2] ? ($az < $cornerbearings[1] ? 0 : 1) : 2) : 3) : 0);
+	unless ($cornershavebeenset) { $edge = "unknown"; }
+	
+	return ($slope,$edge);
+}
+
+sub interceptFromAz {
+	my ($b,$w,$h,$ox,$oy) = @_;
+	my $isvertical = 0;
+	unless (defined $b and defined $w and defined $h) { return undef; }
+	unless (defined $ox and defined $oy) { $ox = $w/2; $oy = $h/2; }
+	unless ($cornershavebeenset) { setCornerHeadings($w,$h); }
+	my ($slope,$edge) = Points::slopeFromAzimuth($b);
+	unless (defined $slope) { $slope = "vert"; $isvertical = 1; }
+	if ($edge eq "unknown") { return undef; }
+	print ($isvertical ? "Slope: $slope\n" : sprintf("Slope: %2f\n",$slope));
+	my $point = Vertex->new(-1,($isvertical ? "$b=>$edge" : sprintf("%d=>%d",$b,$edge)));
+	print "\n ";
+	if ($isvertical) {
+		$point->move($ox,($edge == 0 ? 0 : $h));
+		return $point;
+	}
+	if ($slope == 0.00 and $edge ne 1 and $edge ne 3) { print "Slope error!\n"; exit(-6); }
+	$b = $oy - ($slope * $ox);
+	my ($x,$y) = (0,0);
+	for ($edge) {
+		if (/0/) { $y = 0; $x = $w - int(0.5 + (($y - $b) / $slope));
+		} elsif (/1/) { $x = $w; $y = $h - int(0.5 + ($slope * $x) + $b);
+		} elsif (/2/) { $y = $h; $x = $w - int(0.5 + (($y - $b) / $slope));
+		} elsif (/3/) { $x = 0; $y = $h - int(0.5 + ($slope * $x) + $b);
+		} else {
+			print "ERROR\n"; return undef;
+		}
+	}
+	$point->move($x,$y);
+	return $point;
 }
 
 1;
