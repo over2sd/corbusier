@@ -52,7 +52,7 @@ sub loadSeedsFrom {
 			foreach my $i (@nums) {
 				push(@ls,int($i));
 			}
-		} elsif ($line =~ m/^-?\d\s*\.\.\s*-?\d$/) { # 1 .. 10 sequence
+		} elsif ($line =~ m/^-?\d+\s?\.\.\s?-?\d+$/) { # 1 .. 10 sequence
 			$line =~ s/\.\./;/;
 			my @nums = split(';',$line); # TODO: sanity checking here
 			my @range = (int($nums[0]) .. int($nums[1]));

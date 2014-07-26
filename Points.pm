@@ -275,7 +275,7 @@ sub describe {
 ############################### Points Library #################################
 package Points;
 use List::Util qw( min );
-use Math::Trig qw( atan pi acos );
+use Math::Trig qw( tan pi acos asin );
 use Math::Round qw( round );
 use POSIX qw( floor );
 
@@ -424,14 +424,12 @@ sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
     if ($debug > 1) { print "getAzimuth(@_)\n"; }
 	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
 	if (not defined $whole) { $whole = 0; }
-	return getAHeading($tx-$cx,$ty-$cy,$whole,0);
-	# NOTE: Function doesn't continue past previous line!!!
-	my $dista = $cx;
-	my $distb = getDist($cx,$cy,$tx,$ty,0);
-	my $distc = getDist($cx,0,$tx,$ty,0);
-	print "Triangle sides: $dista, $distb, $distc\n";
-	my $angle = acos(($dista**2 + $distb**2 - $distc**2)/(2 * $dista * $distb));
-	if ($tx < $cx) { $angle = 360 - $angle; } # more than 180 degrees azimuth if target in Q II/III from center.
+	my ($hyp,$rise,$run) = getDist($cx,$cy,$tx,$ty,1);
+	my $opp = abs($rise > $run ? $run : $rise);
+	my $adj = abs($rise > $run ? $rise : $run);
+	my $angle = asin($opp/$hyp)/pi*180;
+	$angle += ($cx > $tx ? ($cy > $ty ? 270 : 180) : ($cy > $ty ? 0 : 90));
+#	printf("\nAngle: %.2f Opp: %.2f Hyp: %.2f",$angle,$opp,$hyp);
 	if ($whole) { $angle = floor($angle + 0.5); }
 	return $angle;
 }
@@ -515,7 +513,7 @@ sub setCornerHeadings {
 	$cornerbearings[3] = getAzimuth($c[0],$c[1] ,0,$h,0);
 #	print "\nW: " . getAzimuth($c[0],$c[1] ,0,$c[1],1);
 	$cornershavebeenset = 1;
-	print "Your corner bearings are set to: $cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3].\n";
+	printf("Your corner bearings are set to: %.2f,%.2f,%.2f,%.2f.\n",$cornerbearings[0],$cornerbearings[1],$cornerbearings[2],$cornerbearings[3]);
 	return 0;
 }
 
@@ -534,7 +532,7 @@ sub slopeFromAzimuth {
 #		print ":!:";
 		$slope = -$slope / 45 + 2;
 	}	else {
-#		print "<$slope>";
+#		This function seems kludgey and wrong, but it gives results more accurate to my expectations than the trig functions I've found elsewhere.
 		my $sloperise = ($slope < 45 ? 45 : -45);
 		my $sloperun = ($slope < 45 ? $slope : 180 - $slope);
 		$slope = $sloperise / $sloperun;
@@ -546,6 +544,9 @@ sub slopeFromAzimuth {
 	return ($slope,$edge);
 }
 
+=item interceptFromAz()
+	Given a bearing, the width and height of the field, and optionally an origin in the form of an ordered pair, returns a vertex at that bearing's intersection with the edge of the field.
+=cut
 sub interceptFromAz {
 	my ($b,$w,$h,$ox,$oy) = @_;
 	my $isvertical = 0;
@@ -555,14 +556,14 @@ sub interceptFromAz {
 	my ($slope,$edge) = Points::slopeFromAzimuth($b);
 	unless (defined $slope) { $slope = "vert"; $isvertical = 1; }
 	if ($edge eq "unknown") { return undef; }
-	print ($isvertical ? "Slope: $slope\n" : sprintf("Slope: %2f\n",$slope));
+	# I guess this function is good enough, for now.
 	my $point = Vertex->new(-1,($isvertical ? "$b=>$edge" : sprintf("%d=>%d",$b,$edge)));
-	print "\n ";
 	if ($isvertical) {
 		$point->move($ox,($edge == 0 ? 0 : $h));
 		return $point;
 	}
 	if ($slope == 0.00 and $edge ne 1 and $edge ne 3) { print "Slope error!\n"; exit(-6); }
+	# we no longer need the bearing, so we're replacing it with the Y-intercept of the line.
 	$b = $oy - ($slope * $ox);
 	my ($x,$y) = (0,0);
 	for ($edge) {
@@ -574,6 +575,11 @@ sub interceptFromAz {
 			print "ERROR\n"; return undef;
 		}
 	}
+	# Maybe these lines will help and not gather every exit into the corners...
+	if ($y > $h) { $x = ($x > $y - $w ? $x - $w + $y : $x); $y = $h; }
+	if ($x > $w) { $y = ($y < $x - $h ? $y - $h + $x : $y); $x = $h; }
+	if ($y < 0) { $x = ($x < $w + $y ? $x - $y : $x); $y = 0; }
+	if ($x < 0) { $y = ($y < $h + $x ? $y - $x : $y); $x = 0; }
 	$point->move($x,$y);
 	return $point;
 }
