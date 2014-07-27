@@ -106,6 +106,70 @@ sub undoIfIsolated {
 	return 0;
 }
 
+=item adjustSideRoad()
+	Moves segment ends if they are less than boundary from endpoints of lines in the given list. Once both ends have been moved, it returns.
+=cut
+sub adjustSideRoad {
+	if ($debug) { print "adjustSideRoad(@_)"; }
+	my ($sideroad,$boundary,@smallroads) = @_;
+	my ($startmoved,$endmoved) = (0,0);
+	foreach my $r (@smallroads) {
+		my ($x,$y,$v,$w) = ($r->ox(),$r->oy(),$r->ex(),$r->ey());
+		my $a = Points::getDist($sideroad->ox(),$sideroad->oy(),$x,$y);
+		my $b = Points::getDist($sideroad->ox(),$sideroad->oy(),$v,$w);
+		my $c = Points::getDist($sideroad->ex(),$sideroad->ey(),$x,$y);
+		my $d = Points::getDist($sideroad->ex(),$sideroad->ey(),$v,$w);
+		if ($a < $boundary) {
+			$sideroad->move($x,$y);
+			$startmoved = 1;
+		} elsif ($b < $boundary) {
+			$sideroad->move($v,$w);
+			$startmoved = 1;
+		}
+		if ($c < $boundary) {
+			$sideroad->move_endpoint($x,$y);
+			$endmoved = 1;
+		} elsif ($d < $boundary) {
+			$sideroad->move_endpoint($v,$w);
+			$endmoved = 1;
+		}
+		if ($startmoved and $endmoved) { last; }
+	}
+	return $startmoved + $endmoved;
+}
+
+=item addSecondaries()
+	Makes a number of secondary roads on a list of highways, then tries to connect some of them together.
+=cut
+sub addSecondaries {
+	if ($debug) { print "addSecondaries(@_);"; }
+	my ($secondratio,$w,$h,@bigroads) = @_;
+	my @smallroads;
+	foreach my $r (@bigroads) {
+#	foreach highway:
+		my $sidestomake = int(0.5 + rand($secondratio));
+		foreach my $i (0 .. $sidestomake) {
+			my $id = scalar(@bigroads)+scalar(@smallroads);
+			my $bear = Points::getAzimuth($r->ex(),$r->ey(),$r->ox(),$r->oy());
+			my $sideroad = Segment->new($id,sprintf("%.2f Road %d",$bear,$id));
+#		choose a point on highway
+			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(rand(70)+15)/100);
+			my $len = int((rand($r->length())+10)/2);
+#		choose a bearing coming off the highway
+			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,15,85,$bear);
+#			$bear = Points::getAzimuth($endpoint->x(),$endpoint->y(),$intersection->x(),$intersection->y());
+#		choose a distance for the road to extend
+#			$intersection = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,0,0,$bear);
+			$sideroad->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
+#			$sideroad->double($w,$h);
+#		(check for bad juxtapositions?)
+#			adjustSideRoad($sideroad,20,@smallroads);
+#		add road to route list
+			push(@smallroads,$sideroad);
+		}
+	}
+	return @smallroads;
+}
 
 sub branchmap {
 	if ($debug) { print "branchmap(@_)\n"; }
@@ -339,17 +403,14 @@ sub branchmap {
 			push(@rts,$line)
 		}
 	}
+#	place secondaries
+	my @secondaries = addSecondaries($sec,$w,$h,@rts);
+	push(@rts,@secondaries);
 =for pseudo
-place secondaries
-	foreach highway:
-		choose a point on highway
-		choose a bearing coming off the highway
-		choose a distance for the road to extend
-		(check for bad juxtapositions?)
-		add road to route list
 place smaller roads
 	checking for 
 =cut
+	# add in internal routes
 	push(@rts,@irts);
 	return $numroutes,@rts;
 }

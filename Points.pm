@@ -208,6 +208,17 @@ sub move_endpoint {
 	return 0;
 }
 
+sub double {
+	my ($self,$w,$h) = @_;
+	printf("%d,%d =>",$self->ex(),$self->ey());
+	my $dx = $self->ex() - $self->ox();
+	my $dy = $self->ey() - $self->oy();
+	my $x = ($self->ex() + $dx < 0 ? 0 : ($self->ex() + $dx > $w ? $w : $self->ex() + $dx));
+	my $y = ($self->ey() + $dy < 0 ? 0 : ($self->ey() + $dy > $h ? $h : $self->ey() + $dy));
+	$self->move_endpoint($x,$y);
+	printf("%d,%d\n",$self->ex(),$self->ey());
+}
+
 sub move_origin_only {
 	my ($self,$x,$y,$z) = @_;
     if ($self->{immobile}) {
@@ -295,10 +306,10 @@ sub findOnLine {
     my ($x1,$y1,$x2,$y2,$frac) = @_;
     my $dx = abs($x1 - $x2);
     my $dy = abs($y1 - $y2);
-    my @p;
-    $p[0] = min($x1,$x2) + ($dx * $frac);
-    $p[1] = min($y1,$y2) + ($dy * $frac);
-    return @p;
+    my $p = Vertex->new();
+    $p->x(min($x1,$x2) + ($dx * $frac));
+    $p->y(min($y1,$y2) + ($dy * $frac));
+    return $p;
 }
 
 sub getDist {
@@ -360,10 +371,10 @@ sub choosePointAtDist {
 sub getPointAtDist {
     if ($debug) { print "getPointAtDist(@_)\n"; }
     my ($x,$y,$d,$b) = @_; ## center/origin x,y; length of line segment; bearing of line segment
-    my @p;
-    $p[0] = $x + (cos($b) * $d);
-    $p[1] = $y + (sin($b) * $d);
-    return @p;
+    my $p = Vertex->new();
+    $p->x($x + (cos($b) * $d));
+    $p->y($y + (sin($b) * $d));
+    return $p;
 }
 
 sub chooseAHeading {
