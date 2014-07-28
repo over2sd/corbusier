@@ -15,7 +15,7 @@ sub genmap {
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
-	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$poi,$max,$w,$h);
+	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$w,$h);
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -110,7 +110,7 @@ sub undoIfIsolated {
 	Moves segment ends if they are less than boundary from endpoints of lines in the given list. Once both ends have been moved, it returns.
 =cut
 sub adjustSideRoad {
-	if ($debug) { print "adjustSideRoad(@_)"; }
+	if ($debug > 1) { print "adjustSideRoad(@_)\n"; }
 	my ($sideroad,$boundary,@smallroads) = @_;
 	my ($startmoved,$endmoved) = (0,0);
 	foreach my $r (@smallroads) {
@@ -148,22 +148,27 @@ sub addSecondaries {
 	foreach my $r (@bigroads) {
 #	foreach highway:
 		my $sidestomake = int(0.5 + rand($secondratio));
+		my $posrange = 1/($sidestomake or 1);
 		foreach my $i (0 .. $sidestomake) {
 			my $id = scalar(@bigroads)+scalar(@smallroads);
 			my $bear = Points::getAzimuth($r->ex(),$r->ey(),$r->ox(),$r->oy());
 			my $sideroad = Segment->new($id,sprintf("%.2f Road %d",$bear,$id));
 #		choose a point on highway
-			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(rand(70)+15)/100);
-			my $len = int((rand($r->length())+10)/2);
-#		choose a bearing coming off the highway
-			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,15,85,$bear);
-#			$bear = Points::getAzimuth($endpoint->x(),$endpoint->y(),$intersection->x(),$intersection->y());
+			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
-#			$intersection = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,0,0,$bear);
+			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
+#		choose a bearing coming off the highway
+			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,30,120,$bear);
+#		Make sure the road doesn't go off the map
+			$endpoint->clip(0,0,$w,$h);
+#		Draw a line between the point and the line
 			$sideroad->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
-#			$sideroad->double($w,$h);
+#		Extend the road an equal distance past the intersection some percentage of the time
+#			if (rand(100) < 75) { 
+			$sideroad->double($w,$h);
+#			}
 #		(check for bad juxtapositions?)
-#			adjustSideRoad($sideroad,20,@smallroads);
+			adjustSideRoad($sideroad,20,@smallroads);
 #		add road to route list
 			push(@smallroads,$sideroad);
 		}
@@ -173,7 +178,7 @@ sub addSecondaries {
 
 sub branchmap {
 	if ($debug) { print "branchmap(@_)\n"; }
-	my ($hiw,$sec,$rat,$poi,$max,$w,$h) =  @_;
+	my ($hiw,$sec,$rat,$max,$w,$h) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	my $numroutes = 0;
 	my @sqs;
@@ -287,6 +292,7 @@ sub branchmap {
 			foreach my $vi (0 .. $#waypoints) { # connect new waypoints to old junctions
 				my $line = Segment->new();
 				my $closest = Points::getClosest($waypoints[$vi]->x(),$waypoints[$vi]->y(),\@sqs);
+				$waypoints[$vi]->clip(0,0,$w,$h);
 				$line->set_ends($waypoints[$vi]->x(),$sqs[$closest]->x(),$waypoints[$vi]->y(),$sqs[$closest]->y());
 				$line->immobilize();
 				push(@irts,$line);
@@ -303,6 +309,7 @@ sub branchmap {
 		while (scalar @exits < $hiw) {
 			my $bearing = $bearingbase + rand($bearingrange);
 			my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
+			$ev->clip(0,0,$w,$h);
 #	check distance from exit to each join
 			my $wayindex = Points::getClosest($ev->x(),$ev->y(),\@sqs);
 #		highways will go from exit to closest join
@@ -394,6 +401,7 @@ sub branchmap {
 			}
 			my $e = Vertex->new();
 			$e->move($x,$y);
+			$e->clip(0,0,$w,$h);
 			push(@exits,$e);
 			my $line = Segment->new($numroutes);
 			$line->set_ends($e->x(),$v->x(),$e->y(),$v->y());
@@ -405,11 +413,13 @@ sub branchmap {
 	}
 #	place secondaries
 	my @secondaries = addSecondaries($sec,$w,$h,@rts);
+	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
-=for pseudo
-place smaller roads
-	checking for 
-=cut
+#place smaller roads
+### This needs a new function...
+#	my @sideroads = addSecondaries($rat,$w,$h,@secondaries);
+#	$numroutes += scalar(@sideroads);
+#	push(@rts,@sideroads);
 	# add in internal routes
 	push(@rts,@irts);
 	return $numroutes,@rts;

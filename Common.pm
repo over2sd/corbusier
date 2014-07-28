@@ -6,7 +6,7 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth );
+our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName );
 
 my $debug = 0;
 
@@ -85,6 +85,33 @@ sub selectWidth {
 	$w *= $increment; # for units, use increment = 1.
 	#print " = $w\n";
 	return $w;
+}
+
+# from same previous library
+sub getColorsbyName {
+	my $name = shift;
+	my @colnames = qw( base red green yellow blue purple cyan ltred ltgreen ltyellow ltblue pink ltcyan white bluong blkrev gray );
+	my $ccode = -1;
+	++$ccode until $ccode > $#colnames or $colnames[$ccode] eq $name;
+	$ccode = ($ccode > $#colnames) ? 0 : $ccode;
+	return getColors($ccode);
+}
+
+# from same previous library
+sub getColors{
+	if (0) { # TODO: check for terminal color compatibility
+		return "";
+	}
+	my @colors = ("\033[0;37;40m","\033[0;31;40m","\033[0;32;40m","\033[0;33;40m","\033[0;34;40m","\033[0;35;40m","\033[0;36;40m","\033[1;31;40m","\033[1;32;40m","\033[1;33;40m","\033[1;34;40m","\033[1;35;40m","\033[1;36;40m","\033[1;37;40m","\033[0;34;47m","\033[7;37;40m","\033[1;30;40m");
+	my $index = shift;
+	if ($index >= scalar @colors) {
+		$index = $index % scalar @colors;
+	}
+	if (defined($index)) {
+		return $colors[int($index)];
+	} else {
+		return @colors;
+	}
 }
 
 1;

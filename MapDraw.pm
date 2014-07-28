@@ -43,9 +43,9 @@ sub formSVG {
 	}
     my @lines = @$linesr;
 	my $out = "    <rect x=\"$offsetx\" y=\"$offsety\" height=\"$h\" width=\"$w\" fill=\"#fff\" />\n";
+    my $curcol = incColor(); # later, do this only when switching road types, or not at all.
     foreach my $i (0 .. $#lines) {
         my $line = $lines[$i];
-        my $curcol = incColor(); # later, do this only when switching road types, or not at all.
         $out = sprintf("$out    <line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"$curcol\" />\n",$line->ox() + $offsetx,$line->oy() + $offsety,$line->ex() + $offsetx,$line->ey() + $offsety);
     }
 	if ($showseed) {

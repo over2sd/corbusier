@@ -83,6 +83,15 @@ sub describe {
     return $bio;
 }
 
+sub clip {
+	my ($self,$minx,$miny,$maxx,$maxy) = @_;
+	my $x = $self->{origin_x};
+	my $y = $self->{origin_y};
+	$x = ($x > $maxx ? $maxx : ($x < $minx ? $minx : $x));
+	$y = ($y > $maxy ? $maxy : ($y < $miny ? $miny : $y));
+	$self->move($x,$y);
+}
+
 ############################### Segment Library ################################
 package Segment;
 
@@ -304,11 +313,12 @@ sub pointIsOnLine { # Don't remember the source of this algorithm, but it was gi
 sub findOnLine {
     if ($debug) { print "findOnLine(@_)\n"; }
     my ($x1,$y1,$x2,$y2,$frac) = @_;
-    my $dx = abs($x1 - $x2);
-    my $dy = abs($y1 - $y2);
+    my $dx = $x1 - $x2;
+    my $dy = $y1 - $y2;
     my $p = Vertex->new();
-    $p->x(min($x1,$x2) + ($dx * $frac));
-    $p->y(min($y1,$y2) + ($dy * $frac));
+	my $x = $x1 - ($dx * $frac);
+	my $y = $y1 - ($dy * $frac);
+	$p->move($x,$y);
     return $p;
 }
 
@@ -371,7 +381,17 @@ sub choosePointAtDist {
 sub getPointAtDist {
     if ($debug) { print "getPointAtDist(@_)\n"; }
     my ($x,$y,$d,$b) = @_; ## center/origin x,y; length of line segment; bearing of line segment
-    my $p = Vertex->new();
+	$b -= 90; # 0 for north, not horizon
+	while ($b > 360) { $b-= 360; }
+	while ($b < 0) { $b += 360; }
+	my $p = Vertex->new();
+	my $rad = pi / 180;
+	my $adj = ($b >= 180 ? 1 : 0);
+	if ($adj) {
+		$b -= 180;
+		$d *= -1;
+	}
+	$b *= $rad;
     $p->x($x + (cos($b) * $d));
     $p->y($y + (sin($b) * $d));
     return $p;
@@ -436,6 +456,7 @@ sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
 	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
 	if (not defined $whole) { $whole = 0; }
 	my ($hyp,$rise,$run) = getDist($cx,$cy,$tx,$ty,1);
+	if ($hyp == 0) { print "\n[W] Identical point!\n"; return 0; }
 	my $opp = abs($rise > $run ? $run : $rise);
 	my $adj = abs($rise > $run ? $rise : $run);
 	my $angle = asin($opp/$hyp)/pi*180;
