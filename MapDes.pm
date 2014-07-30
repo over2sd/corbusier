@@ -138,11 +138,11 @@ sub adjustSideRoad {
 	return $startmoved + $endmoved;
 }
 
-=item addSecondaries()
+=item branchSecondaries()
 	Makes a number of secondary roads on a list of highways, then tries to connect some of them together.
 =cut
-sub addSecondaries {
-	if ($debug) { print "addSecondaries(@_);"; }
+sub branchSecondaries {
+	if ($debug) { print "branchSecondaries(@_);"; }
 	my ($secondratio,$w,$h,$allperp,@bigroads) = @_;
 	my @smallroads;
 	foreach my $r (@bigroads) {
@@ -414,12 +414,12 @@ sub branchmap {
 		}
 	}
 #	place secondaries
-	my @secondaries = addSecondaries($sec,$w,$h,$forcesquare,@rts);
+	my @secondaries = branchSecondaries($sec,$w,$h,$forcesquare,@rts);
 	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
 #place smaller roads
 ### This needs a new function...
-#	my @sideroads = addSecondaries($rat,$w,$h,@secondaries);
+#	my @sideroads = branchSides($rat,$w,$h,@secondaries);
 #	$numroutes += scalar(@sideroads);
 #	push(@rts,@sideroads);
 	# add in internal routes

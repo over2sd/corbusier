@@ -142,9 +142,30 @@ sub slope {
 sub y_intercept {
     my $self = shift;
     my $m = $self->slope();
-    if (not defined $m) { return $self->{origin_x}; } # undefined slope == vertical line.
+    if (not defined $m) { return undef; } # undefined slope == vertical line. No Y-intercept!
+	elsif ($m == 0) { return $self->{origin_y}; } # horizontal line. Y is Y.
     my $b = $self->{origin_y} - ($m * $self->{origin_x});
     return $b;
+}
+
+sub f { # f(x)
+	my ($self,$x) = @_;
+    my $m = $self->slope();
+    if (not defined $m) { return undef; } # undefined slope == vertical line. Any y value will do.
+	elsif ($m == 0) { return $self->{origin_y}; } # horizontal line. Y is constant.
+    my $b = $self->{origin_y} - ($m * $self->{origin_x});
+	my $y = $m * $x + $b;
+	return $y;
+}
+
+sub finv { # f-1(y)
+	my ($self,$y) = @_;
+    my $m = $self->slope();
+    if (not defined $m) { return $self->origin_x; } # undefined slope == vertical line. X is constant.
+	elsif ($m == 0) { return undef; } # horizontal line. Any Y will do.
+    my $b = $self->{origin_y} - ($m * $self->{origin_x});
+	my $x = ($y - $b)/$m;
+	return $x;
 }
 
 sub ox {
@@ -225,12 +246,31 @@ sub move_endpoint {
 }
 
 sub double {
-	my ($self,$w,$h) = @_;
+	my ($self,$w,$h,$minx,$miny) = @_;
+	$self->stretch(2.0,$w,$h,$minx,$miny);
+}
+
+sub stretch {
+	my ($self,$factor,$w,$h,$minx,$miny) = @_;
+	$minx = 0 if not defined $minx;
+	$miny = 0 if not defined $miny;
+	print "Min: $minx,$miny\n";
 	printf("%d,%d =>",$self->ex(),$self->ey());
 	my $dx = $self->ex() - $self->ox();
 	my $dy = $self->ey() - $self->oy();
-	my $x = ($self->ex() + $dx < 0 ? 0 : ($self->ex() + $dx > $w ? $w : $self->ex() + $dx));
-	my $y = ($self->ey() + $dy < 0 ? 0 : ($self->ey() + $dy > $h ? $h : $self->ey() + $dy));
+#	my $x = ($self->ex() + $dx < ($minx or 0) ? ($minx or 0) : ($self->ex() + $dx > $w ? $w : $self->ex() + $dx));
+	my $x = ($self->ox() + ($dx * $factor));
+#	my $y = ($self->ey() + $dy < ($miny or 0) ? ($miny or 0) : ($self->ey() + $dy > $h ? $h : $self->ey() + $dy));
+	my $y = ($self->oy() + ($dy * $factor));
+	if (defined $w and $w > $minx and defined $h and $h > $miny) {
+		my ($setx,$sety);
+		if ($x < $minx) { $setx = $minx; } elsif ($x > $w) { $setx = $w; }
+		if (defined $setx) { $x = $setx; $y = $self->f($x); $setx = undef; }
+		if ($y < $miny) { $sety = $miny; } elsif ($y > $h) { $sety = $h; }
+		if (defined $sety) { $y = $sety; $x = $self->finv($y); }
+		if ($x < $minx) { $setx = $minx; } elsif ($x > $w) { $setx = $w; } # recheck in case the adjusted value is outside the boundaries.
+		if ($setx) { $x = $setx; } # This will mess up the line's slope, but it'll be within the given field.
+	}
 	$self->move_endpoint($x,$y);
 	printf("%d,%d\n",$self->ex(),$self->ey());
 }
@@ -315,6 +355,14 @@ sub new {
 	@$self{ keys %$nodeself  } = values %$nodeself;
 	bless $self, 'Node';
 	return $self;
+}
+
+sub describe {
+    my ($self,$vv,$showz) = @_;
+	if ($vv == 0) { return $self->SUPER::describe($vv,$showz),$self->{maximum},$self->{parentID},$self->{children}; } # just coords (plus my info: max, parent, children)
+	my $out = $self->SUPER::describe($vv,$showz);
+	$out = "$out My parent is " . $self->{parentID} . ". " . (scalar @{ $self->{children} } ? "My children are " . join(',',@{ $self->{children} }) . ". " : "" ) . "My maximum is " . $self->{maximum} . ".";
+	return $out;
 }
 
 ################################# Mesh Library #################################
