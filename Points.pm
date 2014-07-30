@@ -11,6 +11,7 @@ sub new {
         origin_x => ($x1 or 0),
         origin_y => ($y1 or 0),
         origin_z => ($z1 or 0),
+		class => "point",
         immobile => 0
 	};
 	bless $self,$class;
@@ -75,11 +76,17 @@ sub immobilize {
 	return 0;
 }
 
+sub Iama {
+	my $self = shift;
+	return $self->{class};
+}
+
 sub describe {
     my ($self,$vv,$showz) = @_;
     unless (defined $vv) { $vv = 0 };
     if ($vv == 0) { return $self->x(),$self->y(),$self->z(); } # 0
-    my $bio = "I am " . $self->name() . ", a" . ( $self->can_move() ? " " : "n im") . "movable point at (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
+	my $class = $self->Iama();
+    my $bio = "I am " . $self->name() . ", a" . ( $self->can_move() ? " " : "n im") . "movable $class at (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
     return $bio;
 }
 
@@ -291,6 +298,29 @@ sub describe {
     }
     return $bio;
 }
+
+################################ Nodes Library #################################
+package Node;
+use parent -norequire, 'Vertex';
+
+sub new {
+	my ($class,$i,$n,$x,$y,$z,$p) = @_;
+	my $self = Node->SUPER::new($i,$n,$x,$y,$z);
+	my $nodeself = {
+		parentID => ($p or -1),
+		children => [],
+		class => "node",
+		maximum => 0
+	};
+	@$self{ keys %$nodeself  } = values %$nodeself;
+	bless $self, 'Node';
+	return $self;
+}
+
+################################# Mesh Library #################################
+package Mesh; # a collection of nodes
+
+
 
 ############################### Points Library #################################
 package Points;

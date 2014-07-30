@@ -11,11 +11,11 @@ my $debug = 1;
 
 sub genmap {
 	if ($debug) { print "genmap(@_)\n"; }
-	my ($hiw,$sec,$rat,$poi,$max,$w,$h) =  @_;
+	my ($hiw,$sec,$rat,$poi,$max,$w,$h,$squareintersections) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
-	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$w,$h);
+	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$w,$h,$squareintersections);
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -143,22 +143,24 @@ sub adjustSideRoad {
 =cut
 sub addSecondaries {
 	if ($debug) { print "addSecondaries(@_);"; }
-	my ($secondratio,$w,$h,@bigroads) = @_;
+	my ($secondratio,$w,$h,$allperp,@bigroads) = @_;
 	my @smallroads;
 	foreach my $r (@bigroads) {
 #	foreach highway:
 		my $sidestomake = int(0.5 + rand($secondratio));
-		my $posrange = 1/($sidestomake or 1);
+		my $posrange = 1/($sidestomake + 2);
 		foreach my $i (0 .. $sidestomake) {
 			my $id = scalar(@bigroads)+scalar(@smallroads);
 			my $bear = Points::getAzimuth($r->ex(),$r->ey(),$r->ox(),$r->oy());
 			my $sideroad = Segment->new($id,sprintf("%.2f Road %d",$bear,$id));
 #		choose a point on highway
-			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(rand($posrange)+($posrange*$i)));
+			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(($posrange/3)+rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
 			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
 #		choose a bearing coming off the highway
-			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,30,120,$bear);
+			my $minaz = ($allperp ? 89 : (rand(10) > 5 ? 60 : 80));
+			my $maxaz = ($allperp ? 91 : (rand(10) > 5 ? 100 : 120));
+			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,$minaz,$maxaz,$bear);
 #		Make sure the road doesn't go off the map
 			$endpoint->clip(0,0,$w,$h);
 #		Draw a line between the point and the line
@@ -178,7 +180,7 @@ sub addSecondaries {
 
 sub branchmap {
 	if ($debug) { print "branchmap(@_)\n"; }
-	my ($hiw,$sec,$rat,$max,$w,$h) =  @_;
+	my ($hiw,$sec,$rat,$max,$w,$h,$forcesquare) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	my $numroutes = 0;
 	my @sqs;
@@ -412,7 +414,7 @@ sub branchmap {
 		}
 	}
 #	place secondaries
-	my @secondaries = addSecondaries($sec,$w,$h,@rts);
+	my @secondaries = addSecondaries($sec,$w,$h,$forcesquare,@rts);
 	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
 #place smaller roads

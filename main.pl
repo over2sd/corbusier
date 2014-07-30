@@ -9,10 +9,10 @@ use Common;
 use Getopt::Long;
 
 sub mapSeed {
-		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed,$offsetx,$offsety) = @_;
+		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed,$offsetx,$offsety,$forcecrossroads) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
-        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height);
+        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$forcecrossroads);
 #        my @poi = 
         print "- $nr routes\n";
         foreach my $i (0 .. $#routes) {
@@ -43,6 +43,7 @@ sub main {
 	my @seedlist; # list of seeds, read from file
 	my $listfn = ''; # filename for list of seeds
 	my $showhelp = 0;
+	my $crossroadssquare = 0; # secondaries and side roads meet larger roads at close to 90 degrees.
 							$disp = 1; # for development. TODO: Remove this line when done tweaking generator
     GetOptions(
 		'help' => \$showhelp,
@@ -54,6 +55,7 @@ sub main {
 		'listseed|l' => \$disp,
         'map|m=i' => \$seed,
         'poimode|p' => \$poi,
+		'squareint|q' => \$crossroadssquare,
         'ratio|r=i' => \$rat,
         'secondary|s=i' => \$sec,
         'max|x=i' => \$max,
