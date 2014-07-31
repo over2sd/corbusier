@@ -178,6 +178,42 @@ sub branchSecondaries {
 	return @smallroads;
 }
 
+sub branchSides {
+	my ($ratio,$width,$height,@bigroads) = @_;
+	my @sideroads = [];
+# for each road
+	my $i = 0;
+	my $pos = 0.5;
+	foreach my $r (@bigroads) {
+# range is 1/(ratio*2), because we'll be putting a range between each range for roads, to keep the roads far enough apart
+		my $range = 1/($ratio * 2);
+# every other road will be below 0.5, then above 0.5
+		if ($i % 2) {
+			$pos = 0.5 + ($range * $i);
+		} else {
+			$pos = 0.5 - ($range * $i) - $range; # so the even ones are at the same distance as the odd ones from the center
+		}
+# check for over 1/under 0
+		if ($pos > 1.0) {
+			$pos -= 1.0;
+		} elsif ($pos < 0.0) {
+			$pos += 1.0;
+		}
+# pick position
+		my $fraction = $pos + (rand($range) * ($i % 2 ? 1 : -1));
+		my $iv = Points::findOnLine($r->ox(),$r->oy(),$r->ex(),$r->ey(),$fraction);
+	############ Test!!!
+		my $line = Segment->new(0,"test",int(0.5 + $iv->x()),100,int(0.5 + $iv->y()),100);
+# pick length of road
+# pick distance from parent to start road
+# place road
+# shorten/extend road if it crosses or almost reaches another road
+		print $line->describe(1) . "\n";
+		push(@sideroads,$line);
+	}
+	return @sideroads;
+}
+
 sub branchmap {
 	if ($debug) { print "branchmap(@_)\n"; }
 	my ($hiw,$sec,$rat,$max,$w,$h,$forcesquare) =  @_;
