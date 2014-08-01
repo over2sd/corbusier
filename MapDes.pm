@@ -106,6 +106,26 @@ sub undoIfIsolated {
 	return 0;
 }
 
+=item addSideHere()
+
+=cut
+sub addSideHere {
+	my ($intersection,$road,$length,$pfactor,$bear,$w,$h,$doublechance) = @_;
+#		choose a bearing coming off the highway
+	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : 20)));
+	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : 160)));
+	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,$minaz,$maxaz,$bear);
+#		Make sure the road doesn't go off the map
+	$endpoint->clip(0,0,$w,$h);
+#		Draw a line between the point and the line
+	$road->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
+#		Extend the road an equal distance past the intersection some percentage of the time
+	if ($doublechance >= 100 or rand(100) < $doublechance) {
+		$sideroad->double($w,$h);
+	}
+	return $sideroad;
+}
+
 =item adjustSideRoad()
 	Moves segment ends if they are less than boundary from endpoints of lines in the given list. Once both ends have been moved, it returns.
 =cut
@@ -157,18 +177,7 @@ sub branchSecondaries {
 			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(($posrange/3)+rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
 			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
-#		choose a bearing coming off the highway
-			my $minaz = ($allperp ? 89 : (rand(10) > 5 ? 60 : 80));
-			my $maxaz = ($allperp ? 91 : (rand(10) > 5 ? 100 : 120));
-			my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,$minaz,$maxaz,$bear);
-#		Make sure the road doesn't go off the map
-			$endpoint->clip(0,0,$w,$h);
-#		Draw a line between the point and the line
-			$sideroad->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
-#		Extend the road an equal distance past the intersection some percentage of the time
-#			if (rand(100) < 75) { 
-			$sideroad->double($w,$h);
-#			}
+			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(2) ? 2 : 1)),$bear,$w,$h,90); # 100=chance of doubling?
 #		(check for bad juxtapositions?)
 			adjustSideRoad($sideroad,20,@smallroads);
 #		add road to route list
@@ -179,37 +188,42 @@ sub branchSecondaries {
 }
 
 sub branchSides {
+	if ($debug) { print "branchSides(@_);"; }
 	my ($ratio,$width,$height,@bigroads) = @_;
-	my @sideroads = [];
+	my @sideroads;
 # for each road
-	my $i = 0;
 	my $pos = 0.5;
 	foreach my $r (@bigroads) {
 # range is 1/(ratio*2), because we'll be putting a range between each range for roads, to keep the roads far enough apart
 		my $range = 1/($ratio * 2);
+		foreach my $i (0 .. $ratio - 1) {
 # every other road will be below 0.5, then above 0.5
-		if ($i % 2) {
-			$pos = 0.5 + ($range * $i);
-		} else {
-			$pos = 0.5 - ($range * $i) - $range; # so the even ones are at the same distance as the odd ones from the center
-		}
+			if ($i % 2) {
+				$pos = 0.5 + ($range * $i);
+			} else {
+				$pos = 0.5 - ($range * $i) - $range; # so the even ones are at the same distance as the odd ones from the center
+			}
 # check for over 1/under 0
-		if ($pos > 1.0) {
-			$pos -= 1.0;
-		} elsif ($pos < 0.0) {
-			$pos += 1.0;
-		}
+			if ($pos > 1.0) {
+				$pos -= 1.0;
+			} elsif ($pos < 0.0) {
+				$pos += 1.0;
+			}
 # pick position
-		my $fraction = $pos + (rand($range) * ($i % 2 ? 1 : -1));
-		my $iv = Points::findOnLine($r->ox(),$r->oy(),$r->ex(),$r->ey(),$fraction);
+			my $fraction = $pos + (rand($range) * ($i % 2 ? 1 : -1));
+			my $iv = Points::findOnLine($r->ox(),$r->oy(),$r->ex(),$r->ey(),$fraction);
+			$iv->roundLoc(0);
 	############ Test!!!
-		my $line = Segment->new(0,"test",int(0.5 + $iv->x()),100,int(0.5 + $iv->y()),100);
+			my $line = Segment->new(0,"test");
 # pick length of road
 # pick distance from parent to start road
 # place road
+($iv,$road,$length,$pfactor,$bear,$w,$h,$doublechance)
 # shorten/extend road if it crosses or almost reaches another road
-		print $line->describe(1) . "\n";
-		push(@sideroads,$line);
+
+			print $line->describe(1) . "\n";
+			push(@sideroads,$line);
+		}
 	}
 	return @sideroads;
 }

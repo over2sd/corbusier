@@ -61,6 +61,15 @@ sub move {
     return 0;
 }
 
+sub roundLoc {
+	my ($self,$prec) = @_;
+	use Math::Round qw( nearest );
+	my $target = 1;
+	while ($prec > 0) { $target /= 10; $prec--; }
+	$self->move(nearest($target,$self->{origin_x}),nearest($target,$self->{origin_y}));
+	if ($debug) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n";
+}
+
 sub can_move {
 	my ($self,$value) = @_;
 	if (defined $value) {
