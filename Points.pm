@@ -67,7 +67,7 @@ sub roundLoc {
 	my $target = 1;
 	while ($prec > 0) { $target /= 10; $prec--; }
 	$self->move(nearest($target,$self->{origin_x}),nearest($target,$self->{origin_y}));
-	if ($debug) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n";
+	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n"; }
 }
 
 sub can_move {
@@ -228,6 +228,11 @@ sub ez {
     return $self->{origin_z} + $self->{distance_z};
 }
 
+sub azimuth {
+	my ($self,$whole) = @_;
+	return Points::getAzimuth($self->ex(),$self->ey(),$self->ox(),$self->oy(),$whole);
+}
+
 sub move {
 	my ($self,$x,$y,$z) = @_;
     if ($self->{immobile}) {
@@ -328,6 +333,15 @@ sub set_ends {
     return $rv;
 }
 
+sub roundLoc {
+	my ($self,$prec) = @_;
+	use Math::Round qw( nearest );
+	my $target = 1;
+	while ($prec > 0) { $target /= 10; $prec--; }
+	$self->set_ends(nearest($target,$self->{origin_x}),nearest($target,$self->ex()),nearest($target,$self->{origin_y}),nearest($target,$self->ey()),nearest($target,$self->{origin_z}),nearest($target,$self->ez()));
+	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . "," . $self->{origin_z} . ")-(" . $self->ex() . "," . $self->ey() . "," . $self->ez() . ").\n"; }
+}
+
 sub length {
 	my $self = shift;
 	return Points::getDist($self->ox(),$self->oy(),$self->ex(),$self->ey());
@@ -378,6 +392,17 @@ sub describe {
 package Mesh; # a collection of nodes
 
 
+sub addNode {
+}
+
+sub removeNode {
+}
+
+sub connectNodes {
+}
+
+sub findPath {
+}
 
 ############################### Points Library #################################
 package Points;
@@ -399,21 +424,22 @@ sub pointIsOnLine { # Don't remember the source of this algorithm, but it was gi
 
 sub findOnLine {
     if ($debug) { print "findOnLine(@_)\n"; }
-    my ($x1,$y1,$x2,$y2,$frac) = @_;
+    my ($x1,$y1,$x2,$y2,$frac,$whole) = @_;
     my $dx = $x1 - $x2;
     my $dy = $y1 - $y2;
     my $p = Vertex->new();
 	my $x = $x1 - ($dx * $frac);
 	my $y = $y1 - ($dy * $frac);
 	$p->move($x,$y);
+	if ($whole) { $p->roundLoc(0); }
     return $p;
 }
 
 sub getDist {
     if ($debug > 1) { print "getDist(@_)\n"; }
     my ($x1,$y1,$x2,$y2,$sides) = @_; # point 1, point 2, return all distances?
-    my $dx = $x1 - $x2; # preserving sign for rise/run
-    my $dy = $y1 - $y2;
+    my $dx = $x2 - $x1; # preserving sign for rise/run
+    my $dy = $y2 - $y1;
 	unless ($dx or $dy) { return ($sides ? (0,0,0) : 0); } # same point
 #	unless ($dx and $dy) { return ($dx ? $dx : $dy); } # horiz/vert line ## can't do this efficiently with sides variable
     my $d = sqrt($dx**2 + $dy**2); # squaring makes values absolute
@@ -460,14 +486,14 @@ sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
 
 sub choosePointAtDist {
     if ($debug) { print "choosePointAtDist(@_)\n"; }
-    my ($x,$y,$dist,$min,$max,$offset) = @_; ## center/origin x,y; length of line segment; min,max bearing of line; bearing offset
+    my ($x,$y,$dist,$min,$max,$offset,$whole) = @_; ## center/origin x,y; length of line segment; min,max bearing of line; bearing offset
     my $bearing = rand($max - $min) + $min + $offset;
-    return getPointAtDist($x,$y,$dist,$bearing);
+    return getPointAtDist($x,$y,$dist,$bearing,$whole);
 }
 
 sub getPointAtDist {
-    if ($debug) { print "getPointAtDist(@_)\n"; }
-    my ($x,$y,$d,$b) = @_; ## center/origin x,y; length of line segment; bearing of line segment
+    if ($debug > 1) { print "getPointAtDist(@_)\n"; }
+    my ($x,$y,$d,$b,$whole) = @_; ## center/origin x,y; length of line segment; bearing of line segment
 	$b -= 90; # 0 for north, not horizon
 	while ($b > 360) { $b-= 360; }
 	while ($b < 0) { $b += 360; }
@@ -481,6 +507,7 @@ sub getPointAtDist {
 	$b *= $rad;
     $p->x($x + (cos($b) * $d));
     $p->y($y + (sin($b) * $d));
+	if ($whole) { $p->roundLoc(0); }
     return $p;
 }
 
@@ -544,11 +571,22 @@ sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
 	if (not defined $whole) { $whole = 0; }
 	my ($hyp,$rise,$run) = getDist($cx,$cy,$tx,$ty,1);
 	if ($hyp == 0) { print "\n[W] Identical point!\n"; return 0; }
+	if ($rise == 0) {
+		if ($debug > 8) { print "Nocalc horiz\n"; } return ($run > 0 ? 90 : 270);
+	} elsif ($run == 0) {
+		if ($debug > 8) { print "Nocalc vert\n"; } return ($rise > 0 ? 180 : 0);
+	}
 	my $opp = abs($rise > $run ? $run : $rise);
-	my $adj = abs($rise > $run ? $rise : $run);
+#	my $adj = abs($rise > $run ? $rise : $run);
 	my $angle = asin($opp/$hyp)/pi*180;
-	$angle += ($cx > $tx ? ($cy > $ty ? 270 : 180) : ($cy > $ty ? 0 : 90));
-#	printf("\nAngle: %.2f Opp: %.2f Hyp: %.2f",$angle,$opp,$hyp);
+	if ($cx > $tx) { # Getting an accurate azimuth reading has to be the kludgiest, most convoluted thing I have ever had to code.
+		if ($cy > $ty) { $angle = 270 + ($rise > $run ? 90 - $angle : $angle);
+		} else { $angle = 270 - (90 - $angle); }
+	} else {
+		if ($cy > $ty) { $angle = 90 - $angle;
+		} else { $angle = (abs($rise) > abs($run) ? 180 - $angle : 90 + $angle); }
+	}
+	if ($debug > 1) { printf("Angle: %.2f Opp: %.2f Hyp: %.2f\n",$angle,$opp,$hyp); }
 	if ($whole) { $angle = floor($angle + 0.5); }
 	return $angle;
 }

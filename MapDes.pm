@@ -112,18 +112,18 @@ sub undoIfIsolated {
 sub addSideHere {
 	my ($intersection,$road,$length,$pfactor,$bear,$w,$h,$doublechance) = @_;
 #		choose a bearing coming off the highway
-	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : 20)));
-	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : 160)));
-	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$len,$minaz,$maxaz,$bear);
+	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : 40)));
+	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : 140)));
+	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$length,$minaz,$maxaz,$bear);
 #		Make sure the road doesn't go off the map
 	$endpoint->clip(0,0,$w,$h);
 #		Draw a line between the point and the line
 	$road->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
 #		Extend the road an equal distance past the intersection some percentage of the time
 	if ($doublechance >= 100 or rand(100) < $doublechance) {
-		$sideroad->double($w,$h);
+		$road->double($w,$h);
 	}
-	return $sideroad;
+	return $road;
 }
 
 =item adjustSideRoad()
@@ -171,13 +171,14 @@ sub branchSecondaries {
 		my $posrange = 1/($sidestomake + 2);
 		foreach my $i (0 .. $sidestomake) {
 			my $id = scalar(@bigroads)+scalar(@smallroads);
-			my $bear = Points::getAzimuth($r->ex(),$r->ey(),$r->ox(),$r->oy());
+			my $bear = $r->azimuth();
+			if ($id % 2) { $bear += int(rand(10) + 175); }
 			my $sideroad = Segment->new($id,sprintf("%.2f Road %d",$bear,$id));
 #		choose a point on highway
 			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(($posrange/3)+rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
 			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
-			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(2) ? 2 : 1)),$bear,$w,$h,90); # 100=chance of doubling?
+			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(8) > 7.0 ? 0 : 2)),$bear,$w,$h,75); # 100=chance of doubling?
 #		(check for bad juxtapositions?)
 			adjustSideRoad($sideroad,20,@smallroads);
 #		add road to route list
@@ -214,13 +215,12 @@ sub branchSides {
 			my $iv = Points::findOnLine($r->ox(),$r->oy(),$r->ex(),$r->ey(),$fraction);
 			$iv->roundLoc(0);
 	############ Test!!!
-			my $line = Segment->new(0,"test");
+			my $line = Segment->new(0,"test $i");
 # pick length of road
 # pick distance from parent to start road
 # place road
-($iv,$road,$length,$pfactor,$bear,$w,$h,$doublechance)
+			addSideHere($iv,$line,10 + rand($r->length()/6) + $r->length()/6,2,$r->azimuth(),$width,$height,99);
 # shorten/extend road if it crosses or almost reaches another road
-
 			print $line->describe(1) . "\n";
 			push(@sideroads,$line);
 		}
@@ -469,9 +469,9 @@ sub branchmap {
 	push(@rts,@secondaries);
 #place smaller roads
 ### This needs a new function...
-#	my @sideroads = branchSides($rat,$w,$h,@secondaries);
-#	$numroutes += scalar(@sideroads);
-#	push(@rts,@sideroads);
+	my @sideroads = branchSides($rat,$w,$h,@secondaries);
+	$numroutes += scalar(@sideroads);
+	push(@rts,@sideroads);
 	# add in internal routes
 	push(@rts,@irts);
 	return $numroutes,@rts;

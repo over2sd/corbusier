@@ -84,7 +84,7 @@ sub main {
 			my ($x,$y) = (0,0);
 			my $width = Common::selectWidth($w,scalar(@seedlist));
 			foreach my $seed (@seedlist) {
-				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,$x,$y);
+				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,$x,$y,$crossroadssquare);
 				push(@svglist,$svgstring);
 				$x += $w;
 				if ($x >= $width) {
@@ -97,7 +97,7 @@ sub main {
 				$svg = "$svg$add\n";
 			}
 		} else {
-			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp);
+			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,0,0,$crossroadssquare);
 		}
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
