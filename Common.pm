@@ -6,7 +6,9 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName );
+our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between );
+
+use List::Util qw( min max );
 
 my $debug = 0;
 
@@ -38,6 +40,7 @@ sub findIn {
 	return -1;
 }
 
+# new
 sub loadSeedsFrom {
 	my @ls;
 	my $fn = shift;
@@ -69,6 +72,7 @@ sub loadSeedsFrom {
 =item selectWidth()
 	Given an increment and a total number of units in the rectangle, returns a logical width for smallest total rectangle area.
 =cut
+# new for this project
 sub selectWidth {
 	my $w = 1;
 	my ($increment,$total) = @_;
@@ -112,6 +116,19 @@ sub getColors{
 	} else {
 		return @colors;
 	}
+}
+
+# new for this project
+sub between {
+	my ($unk,$bound1,$bound2,$exclusive,$fuzziness) = @_;
+	$fuzziness = 0 if not defined $fuzziness;
+	if ($unk < min($bound1,$bound2) - $fuzziness or $unk > max($bound1,$bound2) + $fuzziness) {
+		return 0; # out of range
+	}
+	if (defined $exclusive and $exclusive == 1 and ($unk == $bound1 or $unk == $bound2)) {
+		return 0; # not between but on one boundary
+	}
+	return 1; # in range
 }
 
 1;

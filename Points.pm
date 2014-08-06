@@ -111,6 +111,8 @@ sub clip {
 ############################### Segment Library ################################
 package Segment;
 
+use Common qw ( between );
+
 sub new {
 	my ($class,$i,$n,$x1,$x2,$y1,$y2,$z1,$z2) = @_; # needs ID;
 	my $self = {
@@ -147,6 +149,10 @@ sub slope {
     if ($self->{distance_y} == 0) { return 0; } # horizontal line
     return $self->{distance_y} / $self->{distance_x};
 }
+
+=item y_intercept()
+	NB: This function returns the theoretical y-intercept of the segment even if it does not actually cross the y axis.
+=cut
 
 sub y_intercept {
     my $self = shift;
@@ -347,6 +353,55 @@ sub length {
 	return Points::getDist($self->ox(),$self->oy(),$self->ex(),$self->ey());
 }
 
+sub fparts { # give the necessary function parts
+	my $self = shift;
+	return ($self->slope(),$self->y_intercept()); # (m,b)
+}
+
+sub intersects { #returns a theoretical intersection, even if neither segment contains it.
+	my ($self,$line) = @_;
+	unless (ref($self) eq 'Segment' and ref($line) eq 'Segment') { return undef; }
+	my ($a,$c) = $self->fparts();
+	my ($b,$d) = $line->fparts();
+	if ($a == $b) { # same slope, parallel
+		unless ($c == $d) { #Not on same path
+			return undef;
+		}
+	}
+	# after Wikipedia:Line-line_intersection#Intersection_of_two_lines_in_the_plane
+	my $x = ($d-$c)/($a-$b);
+	my $y = $a * $x + $c;
+	unless ($y == $b * $x + $d) {
+		if (0) { printf("\t%.2f =/= %.2f\t",$y,$b * $x + $d); }
+		return undef;
+	} else {
+		return ($x,$y);
+	}
+}
+
+sub partOfMe {
+	my $fuzziness = 0.01; # floating point fuzziness factor
+	my ($self,$v) = @_;
+	unless (ref($self) eq 'Segment' and ref($v) eq 'Vertex') { return 0; }
+	my ($m,$b) = $self->fparts();
+	if (between($v->x(),$self->ox(),$self->ex(),0,$fuzziness)
+	and abs($m * $v->x() + $b - $v->y()) < $fuzziness) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+sub touches { # returns an actual intersection, or undef if the lines don't touch.
+	my ($self,$line) = @_;
+	unless (ref($self) eq 'Segment' and ref($line) eq 'Segment') { return undef; }
+	my $p = Vertex->new(-1,"Junction",$self->intersects($line));
+	my $pointself = $self->partOfMe($p);
+	my $pointline = $line->partOfMe($p);
+	return ($pointself and $pointline,$p->x(),$p->y()); # does it touch?; intersect x; intersect y
+	# (intersect is not valid unless does it touch? == 1) Included in all returns in case caller wants to extend a lin to the intersection.
+}
+
 sub describe {
     my ($self,$vv,$showz) = @_;
     unless (defined $vv) { $vv = 0 };
@@ -406,6 +461,7 @@ sub findPath {
 
 ############################### Points Library #################################
 package Points;
+use Common qw ( between );
 use List::Util qw( min );
 use Math::Trig qw( tan pi acos asin );
 use Math::Round qw( round );
@@ -416,10 +472,13 @@ my @cornerbearings = (0,0,0,0);
 
 sub pointIsOnLine { # Don't remember the source of this algorithm, but it was given as a formula.
     if ($debug) { print "pointIsOnLine(@_)"; }
-    my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness) = @_; # point, line start, line end, max determinant
+    my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness,$checkrange) = @_; # point, line start, line end, max determinant
+	if (defined $checkrange and $checkrange == 1) {
+		unless (between($x0,$x1,$x2,0,$fuzziness)) { return 0; }
+	}
     my $det = ($x2 - $x1) * ($y0 - $y1) - ($y2 - $y1) * ($x0 - $x1);
 	if ($debug) { print "=>$det\n"; }
-    return (abs($det) < $fuzziness);
+    return (abs($det) < ($fuzziness or 0));
 }
 
 sub findOnLine {
