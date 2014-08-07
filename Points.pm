@@ -176,7 +176,7 @@ sub f { # f(x)
 sub finv { # f-1(y)
 	my ($self,$y) = @_;
     my $m = $self->slope();
-    if (not defined $m) { return $self->origin_x; } # undefined slope == vertical line. X is constant.
+    if (not defined $m) { return $self->{origin_x}; } # undefined slope == vertical line. X is constant.
 	elsif ($m == 0) { return undef; } # horizontal line. Any Y will do.
     my $b = $self->{origin_y} - ($m * $self->{origin_x});
 	my $x = ($y - $b)/$m;
@@ -274,8 +274,8 @@ sub stretch {
 	my ($self,$factor,$w,$h,$minx,$miny) = @_;
 	$minx = 0 if not defined $minx;
 	$miny = 0 if not defined $miny;
-	print "Min: $minx,$miny\n";
-	printf("%d,%d =>",$self->ex(),$self->ey());
+#	print "Min: $minx,$miny\n";
+	if (0) { printf("%d,%d =>",$self->ex(),$self->ey()); }
 	my $dx = $self->ex() - $self->ox();
 	my $dy = $self->ey() - $self->oy();
 #	my $x = ($self->ex() + $dx < ($minx or 0) ? ($minx or 0) : ($self->ex() + $dx > $w ? $w : $self->ex() + $dx));
@@ -292,7 +292,7 @@ sub stretch {
 		if ($setx) { $x = $setx; } # This will mess up the line's slope, but it'll be within the given field.
 	}
 	$self->move_endpoint($x,$y);
-	printf("%d,%d\n",$self->ex(),$self->ey());
+	if (0) { printf("%d,%d\n",$self->ex(),$self->ey()); }
 }
 
 sub move_origin_only {

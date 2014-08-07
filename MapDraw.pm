@@ -42,7 +42,11 @@ sub formSVG {
 		$offsety = $exargs{'yoff'};
 	}
     my @lines = @$linesr;
-	my $out = "    <rect x=\"$offsetx\" y=\"$offsety\" height=\"$h\" width=\"$w\" fill=\"#fff\" />\n";
+	my $out = "";
+	foreach my $br (@{ $boxr }) {
+		my %box = %$br;
+		$out = sprintf("$out    <rect x=\"%d\" y=\"%d\" height=\"%d\" width=\"%d\" fill=\"%s\" />\n",$box{'x'} + $offsetx,$box{'y'} + $offsety,$box{'h'},$box{'w'},$box{'f'});
+	}
     my $curcol = incColor(); # later, do this only when switching road types, or not at all.
     foreach my $i (0 .. $#lines) {
         my $line = $lines[$i];

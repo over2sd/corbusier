@@ -8,17 +8,23 @@ use Common;
 
 use Getopt::Long;
 
+my %bgfill = ( 'r' => 255, 'g' => 255, 'b' => 255 );
+
 sub mapSeed {
 		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed,$offsetx,$offsety,$forcecrossroads) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
         my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$forcecrossroads);
 #        my @poi = 
-        print "- $nr routes\n";
-        foreach my $i (0 .. $#routes) {
-            print $routes[$i]->describe(1) . "\n";
-        }
+#		print "- $nr routes\n";
+#		foreach my $i (0 .. $#routes) {
+#            print $routes[$i]->describe(1) . "\n";
+#		}
 		my @boxen;
+		$bgfill{'r'} -= $seed % 255; if ($bgfill{'r'} < 0) { $bgfill{'r'} += 256; }
+		my $fillcolor = sprintf("#%02x%02x%02x",$bgfill{'r'}, $bgfill{'g'}, $bgfill{'b'});
+		my %bgbox; $bgbox{'x'} = 0; $bgbox{'y'} = 0; $bgbox{'w'} = $width; $bgbox{'h'} = $height; $bgbox{'f'} = $fillcolor;
+		push (@boxen,\%bgbox);
 		my %exargs;
 		if ($showtheseed) { $exargs{'seed'} = $seed; }
 		if ($offsetx) { $exargs{'xoff'} = $offsetx; }

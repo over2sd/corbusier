@@ -106,24 +106,37 @@ sub undoIfIsolated {
 	return 0;
 }
 
+my @dist = (0,0,0);
+sub getDistribution { return @dist; }
 =item addSideHere()
 
 =cut
 sub addSideHere {
 	my ($intersection,$road,$length,$pfactor,$bear,$w,$h,$doublechance) = @_;
 #		choose a bearing coming off the highway
-	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : 40)));
-	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : 140)));
+	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : ($pfactor == -1 ? 0 : 40))));
+	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : ($pfactor == -1 ? 1 : 140))));
 	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$length,$minaz,$maxaz,$bear);
 #		Make sure the road doesn't go off the map
 	$endpoint->clip(0,0,$w,$h);
 #		Draw a line between the point and the line
 	$road->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
 #		Extend the road an equal distance past the intersection some percentage of the time
+	my $roaddoubling = 0;
+	my $secondroad = undef;
 	if ($doublechance >= 100 or rand(100) < $doublechance) {
-		$road->double($w,$h);
+		my $a = $road->azimuth() - $bear;
+		if ($a < 180 and $a > 135) {
+			$roaddoubling = 2;
+		} elsif ($a < 360 and $a > 315) {
+			$roaddoubling = 3;
+		} else {
+			$roaddoubling = 1;
+			$road->double($w,$h);
+		}
+		$road->roundLoc(0);
 	}
-	return $road;
+	return $secondroad;
 }
 
 =item adjustSideRoad()
@@ -212,6 +225,11 @@ sub branchSides {
 			}
 # pick position
 			my $fraction = $pos + (rand($range) * ($i % 2 ? 1 : -1));
+			if ($fraction >= 1.0 or $fraction <= -1.0) { # this doesn't solve the problem I hoped it would... TODO: find source of problem and fix it
+				printf("branchSides() has escaped its bounds ($fraction/1.0) on round $i/$ratio from position %.4f in range %.4f of the following line:",$pos,$range);
+				print $r->describe(1) . "\n";
+				exit(-9);
+			}
 			my $iv = Points::findOnLine($r->ox(),$r->oy(),$r->ex(),$r->ey(),$fraction);
 			$iv->roundLoc(0);
 	############ Test!!!
@@ -219,7 +237,11 @@ sub branchSides {
 # pick length of road
 # pick distance from parent to start road
 # place road
-			addSideHere($iv,$line,10 + rand($r->length()/6) + $r->length()/6,2,$r->azimuth(),$width,$height,99);
+			my $foot = addSideHere($iv,$line,10 + rand($r->length()/6) + $r->length()/6,1,$r->azimuth(),$width,$height,95);
+			if (defined $foot) {
+				print $foot->describe(1) . "\n";
+				push(@sideroads,$foot);
+			}
 # shorten/extend road if it crosses or almost reaches another road
 			print $line->describe(1) . "\n";
 			push(@sideroads,$line);
