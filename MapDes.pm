@@ -8,6 +8,7 @@ use Common;
 use POSIX qw( floor );
 use List::Util qw( min );
 my $debug = 1;
+my $errorsarefatal = 0;
 
 sub genmap {
 	if ($debug) { print "genmap(@_)\n"; }
@@ -38,8 +39,12 @@ sub moveIfNear {
 			# check to see if line passes near a closer point:
 			my $distance = Points::perpDist($p->x(),$p->y(),$line->ox(),$line->oy(),$line->ex(),$line->ey());
 			if ($distance < $boundary) { # if another line ends close to this one, move our endpoint to that line's origin if the distance is shorter
-				my $q = Points::getDist($line->ox(),$line->oy(),$p->x(),$p->y());
-				if ($q and $line->length() > $q) {
+#				my $q = Points::getDist($line->ox(),$line->oy(),$p->x(),$p->y());
+				# point's distance from central point
+				my $q = Points::getDist($checklist[$origin_index]->x(),$checklist[$origin_index]->y(),$p->x(),$p->y());
+				# line-end's distance from central point
+				my $r = Points::getDist($line->ox(),$line->oy(),$checklist[$origin_index]->x(),$checklist[$origin_index]->y());
+				if ($q and $r > $q) {
 					if ($debug > 2) { print "Moving " . $line->ex() . "," . $line->ey() . " to " . $p->x() . "," . $p->y() . "\n"; } else { print "~"; }
 					$endpoint = $j;
 					$altered = 1;
@@ -209,7 +214,7 @@ sub branchSides {
 	my $pos = 0.5;
 	foreach my $r (@bigroads) {
 # range is 1/(ratio*2), because we'll be putting a range between each range for roads, to keep the roads far enough apart
-		my $range = 1/($ratio * 2);
+		my $range = 1/(($ratio or 1) * 2);
 		foreach my $i (0 .. $ratio - 1) {
 # every other road will be below 0.5, then above 0.5
 			if ($i % 2) {
@@ -265,7 +270,7 @@ sub branchmap {
 	my $myj = floor($h / 8);
 	foreach my $i (0 .. $joins - 1) { # choose joining point(s)
 		my ($d,$j,$x,$y) = 0,0,0,0;
-		my $v = Vertex->new($i);
+		my $v = Vertex->new(Points::useRUID());
 		my $success = Points::placePoint($v,2 * $mxj,3 * $mxj,2 * $myj,3 * $myj,\@sqs,(min($w,$h) > 125 ? 20 : 5),$joins * 10);
 		if ($v->x() != 0 and $v->y() != 0 and $success) {
 		   push(@sqs,$v);
@@ -351,7 +356,7 @@ sub branchmap {
 				}
 				while ($fromhere < $perjoin) {
 					if (@waypoints >= $needed) { last; }
-					my $wp = Vertex->new();
+					my $wp = Vertex->new(Points::useRUID());
 					my $success = Points::placePoint($wp,$xbound,$xbase,$ybound,$ybase,\@waypoints,($hiw > 12 ? 5 : 20),5 * $hiw);
 					if ($wp->x() != 0 and $wp->y() != 0 and $success) {
 						$wp->immobilize();
@@ -473,7 +478,7 @@ sub branchmap {
 				}
 				if ($debug > 1) { print "Edge pair for (" . $ev->x() . "," . $ev->y() . ") is now ($x,$y).\n"; }
 			}
-			my $e = Vertex->new();
+			my $e = Vertex->new(Points::useRUID());
 			$e->move($x,$y);
 			$e->clip(0,0,$w,$h);
 			push(@exits,$e);
@@ -497,6 +502,76 @@ sub branchmap {
 	# add in internal routes
 	push(@rts,@irts);
 	return $numroutes,@rts;
+}
+
+sub genSquares {
+	print "genSquares(@_)\n";
+	my ($qty,$width,$height,$grouptype,$variance,$waypointsref,$wpqty) = @_;
+	unless ($qty) { return (); }
+	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),int($width/2+0.5),int(0.5+$height/2),int(rand(180)));
+	my ($centqty,@squares);
+	if ($grouptype == 1) { $centqty = 0;
+	} elsif ($grouptype == 2) { $centqty = ($qty % 2 ? 2 : 3);
+	} else {
+		$centqty = 1;
+	}
+	foreach my $i (0 .. $centqty) {
+		my $base = 120 * $i;
+		my $p = Points::choosePointAtDist($cx,$cy,$unit/2,$base,$base+60,$centaz,1);
+		push(@squares,$p);
+		if (@squares >= $qty) { last; }
+	}
+	my $remainingsquares = $qty - @squares;
+	print "Done: " . @squares . " Remaining: $remainingsquares...\n";
+	my $base = rand($#squares * $azunit);
+	while ($remainingsquares > 0) {
+		my $p = Points::choosePointAtDist($cx,$cy,$unit,$base,$base+$azunit,0,1);
+		$base += $azunit * 2;
+		push(@squares,$p);
+		$remainingsquares--;
+	}
+	print "I've made " . @squares . "/$qty squares.\n";
+	if ($wpqty) {
+		if (ref($waypointsref) eq "ARRAY") {
+			my @sazs;
+			foreach my $s (@squares) {
+				my $az = Points::getAzimuth($cx,$cy,$s->x(),$s->y(),1);
+				push(@sazs,$az);
+			}
+			@sazs = sort { $a <=> $b } @sazs;
+			my $wpeach = $wpqty / @sazs;
+			print "Each square gets " . int($wpeach) . " waypoints with " . ($wpqty - int($wpeach) * @sazs)  . " remaining.\n";
+			my (@mins,@maxes);
+			foreach my $i (0 .. $#sazs) {
+				my $min = ($i ? $sazs[$i] : 0);
+				my $max = ($i != $#sazs ? $sazs[$i + 1] : 359);
+				my $range = ($max - $min) / ($wpeach + 1);
+				print " n $min x $max r $range \n";
+				print "Placing " . int($wpeach + ($i != 0 or $wpeach == int($wpeach) ? 1 : 2)) . " waypoints between $min and $max...\n";
+				foreach my $j (1 .. ($i != 0 or $wpeach == int($wpeach) ? $wpeach : $wpeach + 2)) {
+					if ($wpqty <= @$waypointsref) { last; }
+					print "Round: $i:$j...\n";
+					my $base = $min + ($range * ($j - 1));
+					print " b $base x " . ($base + $range) . "\n";
+				}
+			}
+			use Data::Dumper;
+			print Dumper @mins;
+			print Dumper @maxes;
+			print "\n";
+exit(0);
+			foreach my $i (0) {
+#					print "Placing at " . $unit * 1.5 . " along azimuth between $base and " . ($base + $range) . "...\n";
+#					my $wp = Points::choosePointAtDist($cx,$cy,$unit * 1.5,$base,$range + $base,0,1);
+#					push (@$waypointsref,$wp);
+			}
+			print "I've added " . @$waypointsref . "/$wpqty waypoints.\n";
+		} else {
+			print "  [W] $waypointsref is not an array reference! Cannot add waypoints!\n";
+			if ($errorsarefatal) { exit(-5); }
+		}
+	}
+	return @squares;
 }
 
 1;

@@ -469,6 +469,7 @@ use POSIX qw( floor );
 
 my $debug = 1;
 my @cornerbearings = (0,0,0,0);
+my $uid = 1; #time() % 1000; # runtime-unique ID counter for vertices
 
 sub pointIsOnLine { # Don't remember the source of this algorithm, but it was given as a formula.
     if ($debug) { print "pointIsOnLine(@_)"; }
@@ -486,7 +487,7 @@ sub findOnLine {
     my ($x1,$y1,$x2,$y2,$frac,$whole) = @_;
     my $dx = $x1 - $x2;
     my $dy = $y1 - $y2;
-    my $p = Vertex->new();
+    my $p = Vertex->new($uid++);
 	my $x = $x1 - ($dx * $frac);
 	my $y = $y1 - ($dy * $frac);
 	$p->move($x,$y);
@@ -553,10 +554,11 @@ sub choosePointAtDist {
 sub getPointAtDist {
     if ($debug > 1) { print "getPointAtDist(@_)\n"; }
     my ($x,$y,$d,$b,$whole) = @_; ## center/origin x,y; length of line segment; bearing of line segment
+	print "Casting point at $d along $b...\n";
 	$b -= 90; # 0 for north, not horizon
 	while ($b > 360) { $b-= 360; }
 	while ($b < 0) { $b += 360; }
-	my $p = Vertex->new();
+	my $p = Vertex->new($uid++);
 	my $rad = pi / 180;
 	my $adj = ($b >= 180 ? 1 : 0);
 	if ($adj) {
@@ -798,6 +800,10 @@ sub interceptFromAz {
 	if ($x < 0) { $y = ($y < $h + $x ? $y - $x : $y); $x = 0; }
 	$point->move($x,$y);
 	return $point;
+}
+
+sub useRUID {
+	return $uid++;
 }
 
 1;
