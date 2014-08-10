@@ -540,30 +540,36 @@ sub genSquares {
 			}
 			@sazs = sort { $a <=> $b } @sazs;
 			my $wpeach = $wpqty / @sazs;
-			print "Each square gets " . int($wpeach) . " waypoints with " . ($wpqty - int($wpeach) * @sazs)  . " remaining.\n";
-			my (@mins,@maxes);
+			my $extra = ($wpqty - int($wpeach) * @sazs);
+			print "Each square gets " . int($wpeach) . " waypoints with " . $extra  . " remaining.\n";
+			my (@mins,@counts,@ranges);
 			foreach my $i (0 .. $#sazs) {
-				my $min = ($i ? $sazs[$i] : 0);
-				my $max = ($i != $#sazs ? $sazs[$i + 1] : 359);
-				my $range = ($max - $min) / ($wpeach + 1);
+				# TODO? -- Make the waypoints cluster near the squares by using min/max(current algo,square azimuth +/- 10)? Would this cause problems with many waypoints?
+				my $min = ($i ? ($sazs[$i-1] + $sazs[$i])/2 + 1 : 0); # midpoint between this and prev, or 0
+				my $max = ($i != $#sazs ? ($sazs[$i] + $sazs[$i+1])/2 - 1 : 359); # midpoint between this and next, or 359
+				my $thistime = int($wpeach) + ($extra ? 1 : 0);
+				$extra -= ($extra ? 1 : 0);
+				my $range = ($max - $min) / ($thistime);
+				unless ($range > 1) { $range = 1; }
 				print " n $min x $max r $range \n";
-				print "Placing " . int($wpeach + ($i != 0 or $wpeach == int($wpeach) ? 1 : 2)) . " waypoints between $min and $max...\n";
-				foreach my $j (1 .. ($i != 0 or $wpeach == int($wpeach) ? $wpeach : $wpeach + 2)) {
-					if ($wpqty <= @$waypointsref) { last; }
-					print "Round: $i:$j...\n";
-					my $base = $min + ($range * ($j - 1));
-					print " b $base x " . ($base + $range) . "\n";
-				}
+				push(@mins,$min);
+				push(@ranges,$range);
+				push(@counts,$thistime);
 			}
-			use Data::Dumper;
-			print Dumper @mins;
-			print Dumper @maxes;
-			print "\n";
-exit(0);
-			foreach my $i (0) {
-#					print "Placing at " . $unit * 1.5 . " along azimuth between $base and " . ($base + $range) . "...\n";
-#					my $wp = Points::choosePointAtDist($cx,$cy,$unit * 1.5,$base,$range + $base,0,1);
-#					push (@$waypointsref,$wp);
+			foreach my $i (0 .. $#counts) {
+				my $min = $mins[$i];
+				my $range = $ranges[$i];
+				my $max = $min + ($range * $counts[$i]);
+				print "Placing $counts[$i] waypoints between $min and $max...\n";
+				foreach my $j (0 .. $counts[$i] - 1) {
+#					if ($wpqty <= @$waypointsref) { last; }
+#					print "Round: $i:$j...\n";
+					my $base = $min + ($range * $j);
+					my $dist = ($unit * 1.5) + rand($unit * 0.75);
+#					print "Placing at " . sprintf("%.2f",$dist) . " along azimuth between $base and " . ($base + $range) . "...\n";
+					my $wp = Points::choosePointAtDist($cx,$cy,$dist,$base,$range + $base,0,1);
+					push (@$waypointsref,$wp);
+				}
 			}
 			print "I've added " . @$waypointsref . "/$wpqty waypoints.\n";
 		} else {
@@ -572,6 +578,14 @@ exit(0);
 		}
 	}
 	return @squares;
+}
+
+sub connectSqs {
+	my ($sqref,$wpref) = @_;
+	my @roads;
+
+
+	return @roads;
 }
 
 1;

@@ -545,7 +545,7 @@ sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
 }
 
 sub choosePointAtDist {
-    if ($debug) { print "choosePointAtDist(@_)\n"; }
+    if ($debug > 1) { print "choosePointAtDist(@_)\n"; }
     my ($x,$y,$dist,$min,$max,$offset,$whole) = @_; ## center/origin x,y; length of line segment; min,max bearing of line; bearing offset
     my $bearing = rand($max - $min) + $min + $offset;
     return getPointAtDist($x,$y,$dist,$bearing,$whole);
