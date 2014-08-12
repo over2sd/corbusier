@@ -8,7 +8,10 @@ use Common;
 use POSIX qw( floor );
 use List::Util qw( min );
 my $debug = 1;
-my $errorsarefatal = 0;
+my %mdconfig = (
+	errorsarefatal => 0,
+	sortsquares => 1
+);
 
 sub genmap {
 	if ($debug) { print "genmap(@_)\n"; }
@@ -266,6 +269,9 @@ sub branchmap {
 	my $mxj = $hiw > 20 ? 11 : $hiw > 10 ? 7 : 5;
 	my $joins = floor(rand($mxj)) + 1; # choose number of intersections
 	if ($debug) { print "  Joins: " . $joins . "/" . $mxj . "\n"; }
+
+
+## genSqs random mode
 	$mxj = floor($w / 8);
 	my $myj = floor($h / 8);
 	foreach my $i (0 .. $joins - 1) { # choose joining point(s)
@@ -279,8 +285,16 @@ sub branchmap {
 		}
 	}
 	print "Squares: " . scalar(@sqs) . "\n";
+## end genSqs
+
+
+	# connect all village squares
+#	my ($lowindex,@irts) = connectSqs(@sqs,@waypoints);;
 	my @irts;
 	my $lowindex = 0;
+
+
+## connectSqs random mode?
 	# find point closest to center
 	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
 	my @center = (floor($w / 2),floor($h / 2));
@@ -300,6 +314,9 @@ sub branchmap {
 		}
 		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
 	}
+## end section
+
+
 # place highways #############
 	print "\nPlacing highways..";
 # count junctions
@@ -509,6 +526,7 @@ sub genSquares {
 	my ($qty,$width,$height,$grouptype,$variance,$waypointsref,$wpqty) = @_;
 	unless ($qty) { return (); }
 	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),int($width/2+0.5),int(0.5+$height/2),int(rand(180)));
+	# Possible switch: offset all positions by +/- 1 * $unit?
 	my ($centqty,@squares);
 	if ($grouptype == 1) { $centqty = 0;
 	} elsif ($grouptype == 2) { $centqty = ($qty % 2 ? 2 : 3);
@@ -574,18 +592,94 @@ sub genSquares {
 			print "I've added " . @$waypointsref . "/$wpqty waypoints.\n";
 		} else {
 			print "  [W] $waypointsref is not an array reference! Cannot add waypoints!\n";
-			if ($errorsarefatal) { exit(-5); }
+			if ($mdconfig{errorsarefatal}) { exit(-5); }
 		}
 	}
 	return @squares;
 }
 
+# centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth)
+
 sub connectSqs {
-	my ($sqref,$wpref) = @_;
+	my ($sqref,$wpref,$centertype,@center) = @_;
 	my @roads;
+	my $numroutes = 1;
+	# find point closest to center
+	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
+#	my @center = (floor($w / 2),floor($h / 2));
+	my $lowindex = Points::getClosest(@center,$sqref);
+	my @sqs = @$sqref;
+	@sqs = squareSort(0,$sqs[$lowindex],@sqs);
+	foreach my $i (0 .. $#sqs) {	 # link point to all other points
+		if ($i != $lowindex) {
+		   my $line = Segment->new($numroutes);
+		   $numroutes += 1;
+			# This line is to prepare for comparisons:
+			$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
+			$line->name(sprintf("Road%d",$i));
+			moveIfNear($line,$i,$lowindex,20,@sqs);
+			undoIfIsolated($line,\@roads,$sqs[$lowindex]->x(),$sqs[$lowindex]->y());
+			$line->immobilize();
+		   push(@roads,$line)
+		}
+#		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
+	}
+	return $numroutes,@roads;
+}
 
+sub squareSort {
+	my ($returnindex,$origin,@a) = @_;
+	my $i = ();
+	foreach (@a) {
+		push(@$i,Points::getDist($origin->x(),$origin->y(),$_->x(),$_->y()));
+	}
+	my ($sorteda,$index) = listSort($i,@a);
+	use Data::Dumper;
+	print Dumper @$sorteda;
+	print Dumper @$index;
+	exit(0);
+	if ($returnindex) { return @$index; }
+	else { return @$sorteda; }
+}
 
-	return @roads;
+sub listSort {
+	my ($index,@array) = @_;
+	if (@array <= 1) { return \@array,$index; } # already sorted if length 0-1
+	unless (defined $index) { $index = (); }
+	my (@la,@ra,@li,@ri);
+	my $mid = floor(@array/2) - 1;
+#	print "Trying: $mid/$#array/" . $#{$index} . "\n";
+	@la = ($mid <= $#array ? @array[0 .. $mid] : @la);
+	@ra = ($mid + 1 <= $#array ? @array[$mid + 1 .. $#array] : @ra);
+	@li = ($mid <= $#{$index} ? @$index[0 .. $mid] : @li);
+	@ri = ($mid + 1 <= $#{$index} ? @$index[$mid + 1 .. $#{$index}] : @ri);
+	my ($la,$li) = listSort(\@li,@la);
+	my ($ra,$ri) = listSort(\@ri,@ra);
+	my ($outa,$outi) = listMerge($la,$ra,$li,$ri);
+	return ($outa,$outi);
+}
+
+sub listMerge {
+	my ($left,$right,$lind,$rind) = @_;
+	my (@oa,@oi);
+	while (@$left or @$right) {
+		if (@$left and @$right) {
+			if (@$lind[0] < @$rind[0]) {
+				push(@oa,shift(@$left));
+				push(@oi,shift(@$lind));
+			} else {
+				push(@oa,shift(@$right));
+				push(@oi,shift(@$rind));
+			}
+		} elsif (@$left) {
+			push(@oa,shift(@$left));
+			if (@$lind) { push(@oi,@$lind); }
+		} elsif (@$right) {
+			push(@oa,shift(@$right));
+			if (@$rind) { push(@oi,@$rind); }
+		}
+	}
+	return \@oa,\@oi;
 }
 
 1;
