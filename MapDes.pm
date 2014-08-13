@@ -276,7 +276,6 @@ sub branchmap {
 	my $numroutes = 0;
 	my @sqs;
 	my @rts;
-	my @poi;
 	my $mxj = $hiw > 20 ? 11 : $hiw > 10 ? 7 : 5;
 	my $joins = floor(rand($mxj)) + 1; # choose number of intersections
 	if ($debug) { print "  Joins: " . $joins . "/" . $mxj . "\n"; }
@@ -288,134 +287,18 @@ sub branchmap {
 	}
 # If more than one highway per join, grow highways with weight toward even spacing around the map:
 	print "Dividing $hiw among $divisor junctions...";
-	if ($divisor < $hiw) {
 # ensure enough junctions for highways to not look like a panicked exodus
-		if ($divisor < ($hiw / 3)) {
-			$needed = $hiw / 3 - $divisor;
-		}
+	if ($divisor < ($hiw / 3)) {
+		$needed = $hiw / 3 - $divisor;
 	}
 	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed);
 	# connect all village squares
-	($numroutes,my @irts) = MapDes::connectSqs(\@sqs,\@waypoints,$centertype,getCenter(),$numroutes);
+	print "debug $numroutes ";
+	my @irts = connectSqs(\@sqs,\@waypoints,$centertype,\$numroutes);
 	my $lowindex = 0;
 # place highways #############
 	print "\nPlacing highways..";
-# count junctions
-	my @joins;
-# If more than one highway per join, grow highways with weight toward even spacing around the map:
-	if ($divisor < $hiw) {
-		my @exits;
-		my $bearingrange = 360 / $hiw;
-		my $bearingbase = 0;
-		my $w = $mdconfig{width};
-		my $h = $mdconfig{height};
-		while (scalar @exits < $hiw) {
-			my $bearing = $bearingbase + rand($bearingrange);
-			my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
-			$ev->clip(0,0,$w,$h);
-#	check distance from exit to each join
-			my $wayindex = Points::getClosest($ev->x(),$ev->y(),\@sqs);
-#		highways will go from exit to closest join
-			my $line = Segment->new(undef,sprintf("Road on %.2f",$bearing),$ev->x(),$sqs[$wayindex]->x(),$ev->y(),$sqs[$wayindex]->y());
-			moveIfNear($line,-1,$wayindex,20,@sqs);
-			
-			if ($debug > 1) { print "\t" . $line->describe(1) . "\n"; }
-			push(@exits,$ev);
-			$bearingbase += $bearingrange;
-#			$bearingbase = $bearing + 15;
-#			$bearingrange = (360 - $bearingbase) / (($hiw - scalar(@exits)) or 1); # only you can prevent div/0!
-			push(@rts,$line);
-		}
-		print "Function incomplete!\n";
-	} else { # not ($divisor >= $hiw)
-# If fewer than one highway per join, just grow a highway from each to the nearest edge:
-		my @exits;
-		my @edges = ();
-		my $w = $mdconfig{width};
-		my $h = $mdconfig{height};
-		foreach my $i (0 .. $#sqs) {
-			# if more than two, ignore the one most central from list
-			if ($i == $lowindex and $#sqs > 1) { print "'"; next; }
-			print ".";
-			my $v = $sqs[$i];
-#		print ($v  or "undef") . " ";
-# find closest compass direction
-			my $exside = Points::closestCardinal($v->x(),$v->y(),$w,$h);
-			if ($divisor < 4) { # for small number of junctions, don't let the exits cluster on one side.
-				while (@edges and Common::findIn($exside,@edges) != -1) {
-					$exside += 1; print ":";
-					if ($exside > 7) { $exside -= 8; }
-				}
-				push(@edges,$exside);
-			}
-			my ($fx,$fy,$xfirst,$edge) = (1,1,1,0);
-			if ($debug > 1) { print "Highway $hiw is exiting: $exside... \n"; }
-			$hiw -= 1;
-			my ($rng,$base) = (0,0);
-			for ($exside) {
-				if (/1/) { $rng = int($w/3); $base = int($w * 0.67); }
-				elsif (/2/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); }
-				elsif (/3/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); $base = int($w/3); }
-				elsif (/4/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); $base = int($w * 0.67); }
-				elsif (/5/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); $base = int($w * 0.67); }
-				elsif (/6/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); $base = int($w/3); }
-				elsif (/7/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); }
-				elsif (/8/) { $fy = -1; $xfirst = 0; $rng = int($h/3); $base = int($w * 0.67); }
-				elsif (/9/) { $fy = -1; $xfirst = 0; $rng = int($h/3); $base = int($w/3); }
-				elsif (/10/) { $fy = -1; $xfirst = 0; $rng = int($h/3); }
-				else { $rng = int($w/3); }
-			}
-# grow a highway to a point on the edge
-			my ($x,$y);
-			my $mate = $edge;
-			$base += int(rand($rng));
-			if ($base > ($xfirst ? $w : $h)) {
-				my $overage = $base - ($xfirst ? $w : $h) * ($xfirst ? $fy : $fx); # mate, so reverse order
-				$mate += $overage;
-				$base = ($xfirst ? $w : $h);
-			}
-			($x,$y) = ($xfirst ? ($base,$mate) : ($mate,$base));
-			if ($x > $w or $y > $h) {
-				print "For " . $v->id() . ": ($x,$y) $exside\n";
-			}
-# If total is greater than h (or w), trim, and push away from edge with excess
-			foreach my $ev (@exits) {
-				my $mindist = int(($xfirst ? $w : $h) / 15);
-				if (abs(($xfirst ? $ev->x() - $x : $ev->y() - $y)) < $mindist) {
-					if ($debug > 8) { print "--nudge--(" . $ev->x() . "," . $ev->y() . ")><($x,$y)>>"; } else { print "^"; }
-					my $mod;
-					my $dist = ($xfirst ? $ev->x() - $x : $ev->y() - $y);
-					($dist < 0 ? $mod = int(rand(4)) + $mindist - $dist : $mod = -int(rand(4)) -$mindist + $dist);
-					if ($xfirst) { $x += $mod; }
-					else { $y += $mod; }
-					if ($x > $w) { $x = $w - 5; }
-					if ($x < 0) { $x = int(rand(10)) + 5; }
-					if ($y > $h) { $y = $h - 5; }
-					if ($y < 0) { $y = int(rand(10)) + 5; }
-					if ($debug > 8) { print "($x,$y)--"; }
-# TODO: This function seriously needs improvement.
-					if (abs(($xfirst ? $ev->x() - $x : $ev->y() - $y)) < $mindist) {
-						print "Xnudge...(" . $ev->x() . "," . $ev->y() . ")>>";
-						my $dist = ($xfirst ? $ev->x() - $x : $ev->y() - $y);
-						($dist > 0 ? $mod = $mindist + 2 - $dist : $mod = -($mindist + 2) + $dist);
-						($xfirst ? $ev->x($ev->x() + $dist) : $ev->y($ev->y() + $dist));
-						print "(" . $ev->x() . "," . $ev->y() . ")...";
-					}
-				}
-				if ($debug > 1) { print "Edge pair for (" . $ev->x() . "," . $ev->y() . ") is now ($x,$y).\n"; }
-			}
-			my $e = Vertex->new(Points::useRUID());
-			$e->move($x,$y);
-			$e->clip(0,0,$w,$h);
-			push(@exits,$e);
-			my $line = Segment->new($numroutes);
-			$line->set_ends($e->x(),$v->x(),$e->y(),$v->y());
-			moveIfNear($line,-1,-1,85,@sqs);
-			$numroutes += 1;
-#	add highway to route list
-			push(@rts,$line)
-		}
-	}
+	@rts = growHiw(\@irts,$centertype,\$numroutes);
 #	place secondaries
 	my @secondaries = branchSecondaries($sec,$forcesquare,@rts);
 	$numroutes += scalar(@secondaries);
@@ -520,6 +403,7 @@ sub genSquares {
 sub connectSqs {
 	my ($sqref,$wpref,$centertype,$numroutes) = @_;
 	print "Linking village squares..";
+	print "connectSqs(@_)\n";
 	my @roads;
 	# find point closest to center
 	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
@@ -530,7 +414,7 @@ sub connectSqs {
 			my $here = $$sqref[0];
 			foreach my $i (1 .. $#$sqref) {
 				my $next = $$sqref[$i];
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
 				print "Forming ring line " . $line->describe(1) . "\n";
 				$line->immobilize();
@@ -539,7 +423,7 @@ sub connectSqs {
 			}
 			if ($#$sqref) {
 				my $next = $$sqref[0];
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
 				print "Forming ring line " . $line->describe(1) . "\n";
 				$line->immobilize();
@@ -553,10 +437,10 @@ sub connectSqs {
 			$lowindex = 0; # should be, after the previous line.
 			foreach my $i (1 .. $#sqs) {	 # link point to all other points
 				if ($i != $lowindex) {
-					my $line = linkNearest($numroutes,$sqs[$i],sprintf("Road%d",$i),0.67,@sqs[0 .. $i-1]);
+					my $line = linkNearest($$numroutes,$sqs[$i],sprintf("Road%d",$i),0.67,25,@sqs[0 .. $i-1]);
 					$line->immobilize();
 					push(@roads,$line);
-					$numroutes++;
+					$$numroutes++;
 				}
 			}
 		} else { # centertype 0 or unkown...
@@ -567,7 +451,7 @@ sub connectSqs {
 			my $lowindex = Points::getClosest(getCenter(),\@sqs);
 			foreach my $i (0 .. $#sqs) {	 # link point to all other points
 				if ($i != $lowindex) {
-					my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+					my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 					# This line is to prepare for comparisons:
 					$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
 					moveIfNear($line,$i,$lowindex,20,@sqs);
@@ -593,7 +477,7 @@ sub connectSqs {
 			foreach (@$wpref) {
 				my $i = Common::findClosest($_->getMeta("azimuth"),@$index);
 				my $j = $$sorteda[$i];
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($_->x(),$j->x(),$_->y(),$j->y());
 				$line->immobilize();
 				push(@roads,$line);
@@ -612,7 +496,7 @@ sub connectSqs {
 			my $here = $$sorteda[0];
 			foreach my $i (1 .. $#$sorteda) {
 				my $next = $$sorteda[$i];
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
 				$line->immobilize();
 				push(@roads,$line);
@@ -620,7 +504,7 @@ sub connectSqs {
 			}
 			if ($#$sorteda) {
 				my $next = $$sorteda[0];
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
 				$line->immobilize();
 				push(@roads,$line);
@@ -629,14 +513,14 @@ sub connectSqs {
 			foreach my $w (@$wpref) {
 				print ".";
 				my $lowindex = Points::getClosest($w->x(),$w->y(),$sqref);
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($w->x(),$$sqref[$lowindex]->x(),$w->y(),$$sqref[$lowindex]->y());
 				$line->immobilize();
 				push(@roads,$line);
 			}
 		} else { # centertype unkown...
 			foreach my $vi (0 .. $#$wpref) { # connect new waypoints to old junctions
-				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				my $closest = Points::getClosest($$wpref[$vi]->x(),$$wpref[$vi]->y(),$sqref);
 				my $w = $mdconfig{width};
 				my $h = $mdconfig{height};
@@ -647,8 +531,8 @@ sub connectSqs {
 			}
 		}
 	}
-	print "\n";
-	return $numroutes,@roads;
+	print "\nConnected " . @$sqref . " squares with " . @roads . " inner routes...\n";
+	return @roads;
 }
 
 sub squareSort {
@@ -703,19 +587,22 @@ sub listMerge {
 }
 
 sub linkNearest {
-	my ($idnum,$here,$name,$fraction,@sortedlist) = @_;
+	my ($idnum,$here,$name,$fraction,$pbound,@sortedlist) = @_;
+	my $lisv = (ref($sortedlist[0]) eq "Vertex");
 	my $line = Segment->new($idnum);
 	$line->name($name);
-	$line->set_ends($here->x(),$sortedlist[0]->x(),$here->y(),$sortedlist[0]->y());
+	my ($x,$y) = (($lisv ? $sortedlist[0]->x() : $sortedlist[0]->ox()),($lisv ? $sortedlist[0]->y() : $sortedlist[0]->oy()));
+	$line->set_ends($here->x(),$x,$here->y(),$y);
 	if ($debug > 1) { print "Running " . $here->id() . ":\n"; } else { print "."; }
 	my $lowdist = $line->length();
 	foreach my $i (1 .. $#sortedlist) { # start at 1 because we just found the distance to 0.
-		my $testdist = Points::getDist($line->ox(),$line->oy(),$sortedlist[$i]->x(),$sortedlist[$i]->y(),0);
+		($x,$y) = (($lisv ? $sortedlist[$i]->x() : $sortedlist[$i]->ox()),($lisv ? $sortedlist[$i]->y() : $sortedlist[$i]->oy()));
+		my $testdist = Points::getDist($line->ox(),$line->oy(),$x,$y,0);
 		if ($testdist < $lowdist * $fraction and $testdist > 1) { # prevent excessive moves, and moves of end to origin.
-			my $dist = Points::perpDist($sortedlist[$i]->x(),$sortedlist[$i]->y(),$line->ox(),$line->oy(),$line->ex(),$line->ey());
-			if ($dist < 25) {
+			my $dist = Points::perpDist($x,$y,$line->ox(),$line->oy(),$line->ex(),$line->ey());
+			if ($dist < $pbound) {
 				print "Moving endpoint from (" . $line->ex() . "," . $line->ey() . ") to (" . $sortedlist[$i]->x() . "," . $sortedlist[$i]->y() . ").\n" if ($debug > 3);
-				$line->move_endpoint($sortedlist[$i]->x(),$sortedlist[$i]->y());
+				$line->move_endpoint($x,$y);
 				$lowdist = $line->length();
 			} else { 
 				print "Perpdist: $dist (line not moved)\n" if ($debug > 3);
@@ -756,8 +643,135 @@ sub getMDConf {
 
 sub getCenter {
 	my $x = $mdconfig{centerx};
-	my $y = $mdconfig{cetnery};
+	my $y = $mdconfig{centery};
+	print "..Center: ($x,$y)..";
 	return $x,$y;
+}
+
+sub castExits {
+	my ($qty,$road_aref,$origin_aref,$numroutes,$method) = @_;
+	my @center = @$origin_aref;
+	my @roads = @$road_aref;
+	my @exits;
+	for ($method) {
+	 if (/0/) {
+	 } else {
+		if (@roads < $qty) {
+			my $bearingrange = 360 / $qty;
+			my $bearingbase = 0;
+			my $w = $mdconfig{width};
+			my $h = $mdconfig{height};
+			while (scalar @exits < $qty) {
+				my $bearing = $bearingbase + rand($bearingrange);
+				my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
+				$ev->clip(0,0,$w,$h);
+				$ev->setMeta("azimuth",Points::getAzimuth($w/2,$h/2,$ev->x(),$ev->y()));
+				push(@exits,$ev);
+				$bearingbase += $bearingrange;
+			}
+		} else { # not ($divisor >= $hiw)
+# If fewer than one highway per join, just grow a highway from each to the nearest edge:
+			my @pexits;
+			my @edges = ();
+			my $w = $mdconfig{width};
+			my $h = $mdconfig{height};
+			foreach my $i (0 .. $#roads) {
+				# if more than two, ignore the one most central from list
+				print ".";
+				my $r = $roads[$i];
+#		print ($v  or "undef") . " ";
+# find closest compass direction
+				my $exside = Points::closestCardinal($r->ox(),$r->oy(),$w,$h);
+				if (@roads < 4) { # for small number of junctions, don't let the exits cluster on one side.
+					while (@edges and Common::findIn($exside,@edges) != -1) {
+						$exside += 1; print ":";
+						if ($exside > 7) { $exside -= 8; }
+					}
+					push(@edges,$exside);
+				}
+				my ($fx,$fy,$xfirst,$edge) = (1,1,1,0);
+				if ($debug > 1) { print "Highway $qty is exiting: $exside... \n"; }
+				$qty--;
+				my ($rng,$base) = (0,0);
+				for ($exside) {
+					if (/1/) { $rng = int($w/3); $base = int($w * 0.67); }
+					elsif (/2/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); }
+					elsif (/3/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); $base = int($w/3); }
+					elsif (/4/) { $fx = -1; $xfirst = 0; $edge = $w; $rng = int($h/3); $base = int($w * 0.67); }
+					elsif (/5/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); $base = int($w * 0.67); }
+					elsif (/6/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); $base = int($w/3); }
+					elsif (/7/) { $fx = -1; $fy = -1; $edge = $h; $rng = int($w/3); }
+					elsif (/8/) { $fy = -1; $xfirst = 0; $rng = int($h/3); $base = int($w * 0.67); }
+					elsif (/9/) { $fy = -1; $xfirst = 0; $rng = int($h/3); $base = int($w/3); }
+					elsif (/10/) { $fy = -1; $xfirst = 0; $rng = int($h/3); }
+					else { $rng = int($w/3); }
+				}
+# grow a highway to a point on the edge
+				my ($x,$y);
+				my $mate = $edge;
+				$base += int(rand($rng));
+				if ($base > ($xfirst ? $w : $h)) {
+					my $overage = $base - ($xfirst ? $w : $h) * ($xfirst ? $fy : $fx); # mate, so reverse order
+					$mate += $overage;
+					$base = ($xfirst ? $w : $h);
+				}
+				($x,$y) = ($xfirst ? ($base,$mate) : ($mate,$base));
+				if ($x > $w or $y > $h) {
+					print "For " . $r->id() . ": ($x,$y) $exside\n";
+				}
+# If total is greater than h (or w), trim, and push away from edge with excess
+				foreach my $ev (@pexits) {
+					my $mindist = int(($xfirst ? $w : $h) / 15);
+					if (abs(($xfirst ? $ev->x() - $x : $ev->y() - $y)) < $mindist) {
+						if ($debug > 8) { print "--nudge--(" . $ev->x() . "," . $ev->y() . ")><($x,$y)>>"; } else { print "^"; }
+						my $mod;
+						my $dist = ($xfirst ? $ev->x() - $x : $ev->y() - $y);
+						($dist < 0 ? $mod = int(rand(4)) + $mindist - $dist : $mod = -int(rand(4)) -$mindist + $dist);
+						if ($xfirst) { $x += $mod; }
+						else { $y += $mod; }
+						if ($x > $w) { $x = $w - 5; }
+						if ($x < 0) { $x = int(rand(10)) + 5; }
+						if ($y > $h) { $y = $h - 5; }
+						if ($y < 0) { $y = int(rand(10)) + 5; }
+						if ($debug > 8) { print "($x,$y)--"; }
+# TODO: This function seriously needs improvement.
+						if (abs(($xfirst ? $ev->x() - $x : $ev->y() - $y)) < $mindist) {
+							print "Xnudge...(" . $ev->x() . "," . $ev->y() . ")>>";
+							my $dist = ($xfirst ? $ev->x() - $x : $ev->y() - $y);
+							($dist > 0 ? $mod = $mindist + 2 - $dist : $mod = -($mindist + 2) + $dist);
+							($xfirst ? $ev->x($ev->x() + $dist) : $ev->y($ev->y() + $dist));
+							print "(" . $ev->x() . "," . $ev->y() . ")...";
+						}
+					}
+					if ($debug > 1) { print "Edge pair for (" . $ev->x() . "," . $ev->y() . ") is now ($x,$y).\n"; }
+				}
+				my $e = Vertex->new(Points::useRUID());
+				$e->move($x,$y);
+				$e->clip(0,0,$w,$h);
+				$e->setMeta("azimuth",Points::getAzimuth($w/2,$h/2,$e->loc()));
+				push(@pexits,$e);
+				unless ($qty) { last; }
+			}
+			push (@exits,@pexits);
+			print ":$qty=-=" . scalar @exits . ":";
+			unless ($qty) { last; }
+		}
+	 }
+	}
+	print "Returning " . scalar @exits . " exits...\n";
+	return @exits;
+}
+
+sub growHiw {
+	my ($exits,$roads,$numroutes) = @_;
+	my @hiw;
+	foreach my $ev (@$exits) {
+#		highways will go from exit to closest join
+		my $line = linkNearest($$numroutes++,$ev,sprintf("Road on %.2f",$ev->getMeta("azimuth")),1.0,100,@$roads);
+		if ($debug > 1) { print "\t" . $line->describe(1) . "\n"; }
+		push(@hiw,$line);
+	}
+	return @hiw
 }
 
 1;

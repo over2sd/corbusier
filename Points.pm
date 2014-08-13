@@ -43,6 +43,13 @@ sub y {
 	return $self->{origin_y};
 }
 
+sub loc {
+	my ($self,$use_z) = @_;
+	my @loc = ($self->{origin_x},$self->{origin_y});
+	if ($use_z) { push(@loc,$self->{origin_z}); }
+	return @loc;
+}
+
 sub z {
 	my ($self,$value) = @_;
 	$self->{origin_z} = $value if (defined($value) and not $self->{immobile});
