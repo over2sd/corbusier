@@ -10,16 +10,20 @@ use List::Util qw( min );
 my $debug = 1;
 my %mdconfig = (
 	errorsarefatal => 0,
-	sortsquares => 1
+	sortsquares => 1,
+	width => 800,
+	height => 600,
+	centerx => 400,
+	centery => 300
 );
 
 sub genmap {
 	if ($debug) { print "genmap(@_)\n"; }
-	my ($hiw,$sec,$rat,$poi,$max,$w,$h,$squareintersections) =  @_;
+	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
-	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$w,$h,$squareintersections);
+	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$centertype,$squareintersections);
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -120,12 +124,14 @@ sub getDistribution { return @dist; }
 
 =cut
 sub addSideHere {
-	my ($intersection,$road,$length,$pfactor,$bear,$w,$h,$doublechance) = @_;
+	my ($intersection,$road,$length,$pfactor,$bear,$doublechance) = @_;
 #		choose a bearing coming off the highway
 	my $minaz = ($pfactor == 3 ? 89 : ($pfactor == 2 ? 85 : ( $pfactor == 1 ? (rand(10) > 5 ? 60 : 80) : ($pfactor == -1 ? 0 : 40))));
 	my $maxaz = ($pfactor == 3 ? 91 : ($pfactor == 2 ? 95 : ( $pfactor == 1 ? (rand(10) > 5 ? 100 : 120) : ($pfactor == -1 ? 1 : 140))));
 	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$length,$minaz,$maxaz,$bear);
 #		Make sure the road doesn't go off the map
+	my $w = $mdconfig{width};
+	my $h = $mdconfig{height};
 	$endpoint->clip(0,0,$w,$h);
 #		Draw a line between the point and the line
 	$road->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
@@ -140,6 +146,8 @@ sub addSideHere {
 			$roaddoubling = 3;
 		} else {
 			$roaddoubling = 1;
+			my $w = $mdconfig{width};
+			my $h = $mdconfig{height};
 			$road->double($w,$h);
 		}
 		$road->roundLoc(0);
@@ -184,7 +192,7 @@ sub adjustSideRoad {
 =cut
 sub branchSecondaries {
 	if ($debug) { print "branchSecondaries(@_);"; }
-	my ($secondratio,$w,$h,$allperp,@bigroads) = @_;
+	my ($secondratio,$allperp,@bigroads) = @_;
 	my @smallroads;
 	foreach my $r (@bigroads) {
 #	foreach highway:
@@ -199,7 +207,7 @@ sub branchSecondaries {
 			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(($posrange/3)+rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
 			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
-			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(8) > 7.0 ? 0 : 2)),$bear,$w,$h,75); # 100=chance of doubling?
+			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(8) > 7.0 ? 0 : 2)),$bear,75); # 100=chance of doubling?
 #		(check for bad juxtapositions?)
 			adjustSideRoad($sideroad,20,@smallroads);
 #		add road to route list
@@ -211,7 +219,7 @@ sub branchSecondaries {
 
 sub branchSides {
 	if ($debug) { print "branchSides(@_);"; }
-	my ($ratio,$width,$height,@bigroads) = @_;
+	my ($ratio,@bigroads) = @_;
 	my @sideroads;
 # for each road
 	my $pos = 0.5;
@@ -245,7 +253,7 @@ sub branchSides {
 # pick length of road
 # pick distance from parent to start road
 # place road
-			my $foot = addSideHere($iv,$line,10 + rand($r->length()/6) + $r->length()/6,1,$r->azimuth(),$width,$height,95);
+			my $foot = addSideHere($iv,$line,10 + rand($r->length()/6) + $r->length()/6,1,$r->azimuth(),95);
 			if (defined $foot) {
 				print $foot->describe(1) . "\n";
 				push(@sideroads,$foot);
@@ -260,7 +268,10 @@ sub branchSides {
 
 sub branchmap {
 	if ($debug) { print "branchmap(@_)\n"; }
-	my ($hiw,$sec,$rat,$max,$w,$h,$forcesquare) =  @_;
+	my ($hiw,$sec,$rat,$max,$centertype,$forcesquare) =  @_;
+	print "\n\n\n[E] This function has not yet been rewritten to use best available methods.\n\n\n";
+	if (1) { exit(0); }
+
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	my $numroutes = 0;
 	my @sqs;
@@ -269,59 +280,9 @@ sub branchmap {
 	my $mxj = $hiw > 20 ? 11 : $hiw > 10 ? 7 : 5;
 	my $joins = floor(rand($mxj)) + 1; # choose number of intersections
 	if ($debug) { print "  Joins: " . $joins . "/" . $mxj . "\n"; }
-
-
-## genSqs random mode
-	$mxj = floor($w / 8);
-	my $myj = floor($h / 8);
-	foreach my $i (0 .. $joins - 1) { # choose joining point(s)
-		my ($d,$j,$x,$y) = 0,0,0,0;
-		my $v = Vertex->new(Points::useRUID());
-		my $success = Points::placePoint($v,2 * $mxj,3 * $mxj,2 * $myj,3 * $myj,\@sqs,(min($w,$h) > 125 ? 20 : 5),$joins * 10);
-		if ($v->x() != 0 and $v->y() != 0 and $success) {
-		   push(@sqs,$v);
-		} else {
-			if ($debug) { print "!@%&"; }
-		}
-	}
-	print "Squares: " . scalar(@sqs) . "\n";
-## end genSqs
-
-
-	# connect all village squares
-#	my ($lowindex,@irts) = connectSqs(@sqs,@waypoints);;
-	my @irts;
-	my $lowindex = 0;
-
-
-## connectSqs random mode?
-	# find point closest to center
-	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
-	my @center = (floor($w / 2),floor($h / 2));
-	$lowindex = Points::getClosest(@center,\@sqs);
-	foreach my $i (0 .. $#sqs) {	 # link point to all other points
-		if ($i != $lowindex) {
-		   my $line = Segment->new($numroutes);
-		   $numroutes += 1;
-			# This line is to prepare for comparisons:
-			$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
-			$line->name(sprintf("Road%d",$i));
-			moveIfNear($line,$i,$lowindex,20,@sqs);
-			undoIfIsolated($line,\@irts,$sqs[$lowindex]->x(),$sqs[$lowindex]->y());
-			$line->immobilize();
-#			  Save these highways to a separate list that will be added to the end of the routes, so other roads don't come off them.
-		   push(@irts,$line)
-		}
-		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
-	}
-## end section
-
-
-# place highways #############
-	print "\nPlacing highways..";
-# count junctions
-	my @joins;
-	my $divisor = $#sqs;
+	my $needed = 0;
+	my @waypoints;
+	my $divisor = $joins;
 	if ($divisor < 2) { # fewer than three junctions
 		$divisor++;
 	}
@@ -330,78 +291,24 @@ sub branchmap {
 	if ($divisor < $hiw) {
 # ensure enough junctions for highways to not look like a panicked exodus
 		if ($divisor < ($hiw / 3)) {
-			my @waypoints;
-			my $needed = $hiw / 3 - $divisor;
-			print "Adding $needed waypoints.";
-			my $perjoin = int($needed / $divisor) or 1;
-			foreach my $i (0 .. $#sqs) {
-			# if more than two, ignore the one most central from list
-				if ($i == $lowindex and $#sqs != 1) { print "'"; next; }
-				my $fromhere = 0;
-				my $xbound = int($w/10);
-				my $ybound = int($h/10);
-				my $xdiff0 = $sqs[$i]->x();
-				my $xdiffn = $w - $sqs[$i]->x();
-				my $ydiff0 = $sqs[$i]->y();
-				my $ydiffn = $h - $sqs[$i]->y();
-				my $xbase = 0;
-				my $ybase = 0;
-				my $xiscentered = 0;
-				my $xf = $xdiff0 / $xdiffn;
-				my $yf = $ydiff0 / $ydiffn;
-				# divide the map into 8 directions
-				if ($xf < 0.493) {
-					$xbase = int($w / 10);
-					$xbound = int(0.8 * ($xdiff0 - $xbase));
-				} elsif ($xf > 1.941) {
-					$xbase = $xdiff0 + int($w/10);
-					$xbound = int(0.8 * $xdiffn - int($w/10));
-				} else {
-					$xiscentered = 1;
-					$xbase = $xdiff0 - int($w/20);
-					$xbound = int($w/10);
-				}
-				if ($yf < 0.493) {
-					$ybase = int($h / 10);
-					$ybound = int(0.8 * ($ydiff0 - $ybase));
-				} elsif ($yf > 1.941 or $xiscentered ) { # We don't want to toss them both in the center, so y can't center if x does.
-					$ybase = $ydiff0 + int($h/10);
-					$ybound = int(0.8 * $ydiffn - int($h/10));
-				} else {
-					$ybase = $ydiff0 - int($h/20);
-					$ybound = int($h/10);
-				}
-				while ($fromhere < $perjoin) {
-					if (@waypoints >= $needed) { last; }
-					my $wp = Vertex->new(Points::useRUID());
-					my $success = Points::placePoint($wp,$xbound,$xbase,$ybound,$ybase,\@waypoints,($hiw > 12 ? 5 : 20),5 * $hiw);
-					if ($wp->x() != 0 and $wp->y() != 0 and $success) {
-						$wp->immobilize();
-						push(@waypoints,$wp);
-						$fromhere++;
-						print ".";
-					} else {
-						if ($debug) { print "*&^#"; }
-					}
-				}
-			}
-			foreach my $vi (0 .. $#waypoints) { # connect new waypoints to old junctions
-				my $line = Segment->new();
-				my $closest = Points::getClosest($waypoints[$vi]->x(),$waypoints[$vi]->y(),\@sqs);
-				$waypoints[$vi]->clip(0,0,$w,$h);
-				$line->set_ends($waypoints[$vi]->x(),$sqs[$closest]->x(),$waypoints[$vi]->y(),$sqs[$closest]->y());
-				$line->immobilize();
-				push(@irts,$line);
-			}
-			push(@sqs,@waypoints);
-			$divisor = $#sqs; 
-			if ($divisor == 1) { # exactly two junctions
-				$divisor++;
-			}
+			$needed = $hiw / 3 - $divisor;
 		}
+	}
+	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed);
+	# connect all village squares
+	($numroutes,my @irts) = MapDes::connectSqs(\@sqs,\@waypoints,$centertype,getCenter(),$numroutes);
+	my $lowindex = 0;
+# place highways #############
+	print "\nPlacing highways..";
+# count junctions
+	my @joins;
+# If more than one highway per join, grow highways with weight toward even spacing around the map:
+	if ($divisor < $hiw) {
 		my @exits;
 		my $bearingrange = 360 / $hiw;
 		my $bearingbase = 0;
+		my $w = $mdconfig{width};
+		my $h = $mdconfig{height};
 		while (scalar @exits < $hiw) {
 			my $bearing = $bearingbase + rand($bearingrange);
 			my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
@@ -424,6 +331,8 @@ sub branchmap {
 # If fewer than one highway per join, just grow a highway from each to the nearest edge:
 		my @exits;
 		my @edges = ();
+		my $w = $mdconfig{width};
+		my $h = $mdconfig{height};
 		foreach my $i (0 .. $#sqs) {
 			# if more than two, ignore the one most central from list
 			if ($i == $lowindex and $#sqs > 1) { print "'"; next; }
@@ -508,32 +417,37 @@ sub branchmap {
 		}
 	}
 #	place secondaries
-	my @secondaries = branchSecondaries($sec,$w,$h,$forcesquare,@rts);
+	my @secondaries = branchSecondaries($sec,$forcesquare,@rts);
 	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
 #place smaller roads
 ### This needs a new function...
-	my @sideroads = branchSides($rat,$w,$h,@secondaries);
+	my @sideroads = branchSides($rat,@secondaries);
 	$numroutes += scalar(@sideroads);
 	push(@rts,@sideroads);
 	# add in internal routes
 	push(@rts,@irts);
 	return $numroutes,@rts;
-}
+} ## endsub branchmap()
 
+
+# centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth), 3 - 2 or 3 central points, (good for river towns?)
 sub genSquares {
-	print "genSquares(@_)\n";
-	my ($qty,$width,$height,$grouptype,$variance,$waypointsref,$wpqty) = @_;
+	if ($debug > 1) { print "genSquares(@_)\n" };
+	my ($qty,$centertype,$variance,$waypointsref,$wpqty) = @_;
 	unless ($qty) { return (); }
+	my $width = $mdconfig{width};
+	my $height = $mdconfig{height};
 	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),int($width/2+0.5),int(0.5+$height/2),int(rand(180)));
 	# Possible switch: offset all positions by +/- 1 * $unit?
 	my ($centqty,@squares);
-	if ($grouptype == 1) { $centqty = 0;
-	} elsif ($grouptype == 2) { $centqty = ($qty % 2 ? 2 : 3);
+	if ($centertype == 1 or $centertype == 2) { $centqty = 0;
+	} elsif ($centertype == 3) { $centqty = ($qty % 2 ? 2 : 3);
 	} else {
 		$centqty = 1;
 	}
 	foreach my $i (0 .. $centqty) {
+		unless ($centqty) { last; }
 		my $base = 120 * $i;
 		my $p = Points::choosePointAtDist($cx,$cy,$unit/2,$base,$base+60,$centaz,1);
 		push(@squares,$p);
@@ -541,8 +455,9 @@ sub genSquares {
 	}
 	my $remainingsquares = $qty - @squares;
 	print "Done: " . @squares . " Remaining: $remainingsquares...\n";
-	my $base = rand($#squares * $azunit);
+	my $base = (@squares ? rand($#squares * $azunit) : rand(3) * $azunit);
 	while ($remainingsquares > 0) {
+# centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth)
 		my $p = Points::choosePointAtDist($cx,$cy,$unit,$base,$base+$azunit,0,1);
 		$base += $azunit * 2;
 		push(@squares,$p);
@@ -553,8 +468,9 @@ sub genSquares {
 		if (ref($waypointsref) eq "ARRAY") {
 			my @sazs;
 			foreach my $s (@squares) {
-				my $az = Points::getAzimuth($cx,$cy,$s->x(),$s->y(),1);
-				push(@sazs,$az);
+#				my $az = Points::getAzimuth($cx,$cy,$s->x(),$s->y(),1);
+				push(@sazs,$s->getMeta("azimuth"));
+#				$s->setMeta("azimuth",$az);
 			}
 			@sazs = sort { $a <=> $b } @sazs;
 			my $wpeach = $wpqty / @sazs;
@@ -569,7 +485,7 @@ sub genSquares {
 				$extra -= ($extra ? 1 : 0);
 				my $range = ($max - $min) / ($thistime);
 				unless ($range > 1) { $range = 1; }
-				print " n $min x $max r $range \n";
+				print " n $min x $max r $range \n" if ($debug > 8);
 				push(@mins,$min);
 				push(@ranges,$range);
 				push(@counts,$thistime);
@@ -578,12 +494,13 @@ sub genSquares {
 				my $min = $mins[$i];
 				my $range = $ranges[$i];
 				my $max = $min + ($range * $counts[$i]);
-				print "Placing $counts[$i] waypoints between $min and $max...\n";
+				print "Placing $counts[$i] waypoints between $min and $max...\n" if ($debug > 3);
 				foreach my $j (0 .. $counts[$i] - 1) {
 #					if ($wpqty <= @$waypointsref) { last; }
 #					print "Round: $i:$j...\n";
+### TODO: if making a starry ring center and #waypoints=#squares, set base and range narrowly, halfway between azimuths?
 					my $base = $min + ($range * $j);
-					my $dist = ($unit * 1.5) + rand($unit * 0.75);
+					my $dist = ($unit * 1.5) + ($centertype == 1 or $centertype == 2 ? rand(10) : rand($unit * $variance));
 #					print "Placing at " . sprintf("%.2f",$dist) . " along azimuth between $base and " . ($base + $range) . "...\n";
 					my $wp = Points::choosePointAtDist($cx,$cy,$dist,$base,$range + $base,0,1);
 					push (@$waypointsref,$wp);
@@ -601,29 +518,136 @@ sub genSquares {
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth)
 
 sub connectSqs {
-	my ($sqref,$wpref,$centertype,@center) = @_;
+	my ($sqref,$wpref,$centertype,$numroutes) = @_;
+	print "Linking village squares..";
 	my @roads;
-	my $numroutes = 1;
 	# find point closest to center
 	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
 #	my @center = (floor($w / 2),floor($h / 2));
-	my $lowindex = Points::getClosest(@center,$sqref);
 	my @sqs = @$sqref;
-	@sqs = squareSort(0,$sqs[$lowindex],@sqs);
-	foreach my $i (0 .. $#sqs) {	 # link point to all other points
-		if ($i != $lowindex) {
-		   my $line = Segment->new($numroutes);
-		   $numroutes += 1;
-			# This line is to prepare for comparisons:
-			$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
-			$line->name(sprintf("Road%d",$i));
-			moveIfNear($line,$i,$lowindex,20,@sqs);
-			undoIfIsolated($line,\@roads,$sqs[$lowindex]->x(),$sqs[$lowindex]->y());
-			$line->immobilize();
-		   push(@roads,$line)
+	for ($centertype) {
+		if (/2/) {
+			my $here = $$sqref[0];
+			foreach my $i (1 .. $#$sqref) {
+				my $next = $$sqref[$i];
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				print "Forming ring line " . $line->describe(1) . "\n";
+				$line->immobilize();
+				push(@roads,$line);
+				$here = $next;
+			}
+			if ($#$sqref) {
+				my $next = $$sqref[0];
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				print "Forming ring line " . $line->describe(1) . "\n";
+				$line->immobilize();
+				push(@roads,$line);
+			}
+		} elsif (/1/) {
+			if ($debug) { print "Starry ring doesn't connect its squares. This is working properly.\n"; }
+		} elsif (/0/) {
+			my $lowindex = Points::getClosest(getCenter(),$sqref);
+			@sqs = squareSort(0,$sqs[$lowindex],@sqs);
+			$lowindex = 0; # should be, after the previous line.
+			foreach my $i (1 .. $#sqs) {	 # link point to all other points
+				if ($i != $lowindex) {
+					my $line = linkNearest($numroutes,$sqs[$i],sprintf("Road%d",$i),0.67,@sqs[0 .. $i-1]);
+					$line->immobilize();
+					push(@roads,$line);
+					$numroutes++;
+				}
+			}
+		} else { # centertype 0 or unkown...
+	## connectSqs random mode?
+			# find point closest to center
+			# center now comes from argument, not this calculation
+#			my @center = (floor($w / 2),floor($h / 2));
+			my $lowindex = Points::getClosest(getCenter(),\@sqs);
+			foreach my $i (0 .. $#sqs) {	 # link point to all other points
+				if ($i != $lowindex) {
+					my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+					# This line is to prepare for comparisons:
+					$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
+					moveIfNear($line,$i,$lowindex,20,@sqs);
+					undoIfIsolated($line,\@roads,$sqs[$lowindex]->x(),$sqs[$lowindex]->y());
+					$line->immobilize();
+	#			  Save these highways to a separate list that will be added to the end of the routes, so other roads don't come off them.
+					push(@roads,$line);
+				}
+#				if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
+			}
+		## end section
 		}
-#		if ($i == $#sqs and $numroutes < $hiw) { $i = 0; } elsif ($numroutes >= $hiw) { last; } #Another go around, or leave early
+	} # end of squares connections
+	print ", waypoints..";
+	
+	for ($centertype) {
+		if (/2/) {
+			my @srindex;
+			foreach (@$sqref) {
+				push(@srindex,$_->getMeta("azimuth"));
+			}
+			my ($sorteda,$index) = listSort(\@srindex,@$sqref);
+			foreach (@$wpref) {
+				my $i = Common::findClosest($_->getMeta("azimuth"),@$index);
+				my $j = $$sorteda[$i];
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($_->x(),$j->x(),$_->y(),$j->y());
+				$line->immobilize();
+				push(@roads,$line);
+			}
+		} elsif (/1/) {
+			my (@ring,@srindex);
+			foreach (@$sqref) {
+				push(@srindex,$_->getMeta("azimuth"));
+				push(@ring,$_);
+			}
+			foreach (@$wpref) {
+				push(@srindex,$_->getMeta("azimuth"));
+				push(@ring,$_);
+			}
+			my ($sorteda,$index) = listSort(\@srindex,@ring);
+			my $here = $$sorteda[0];
+			foreach my $i (1 .. $#$sorteda) {
+				my $next = $$sorteda[$i];
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->immobilize();
+				push(@roads,$line);
+				$here = $next;
+			}
+			if ($#$sorteda) {
+				my $next = $$sorteda[0];
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->immobilize();
+				push(@roads,$line);
+			}
+		} elsif (/0/) {
+			foreach my $w (@$wpref) {
+				print ".";
+				my $lowindex = Points::getClosest($w->x(),$w->y(),$sqref);
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				$line->set_ends($w->x(),$$sqref[$lowindex]->x(),$w->y(),$$sqref[$lowindex]->y());
+				$line->immobilize();
+				push(@roads,$line);
+			}
+		} else { # centertype unkown...
+			foreach my $vi (0 .. $#$wpref) { # connect new waypoints to old junctions
+				my $line = Segment->new($numroutes,sprintf("Road%d",++$numroutes));
+				my $closest = Points::getClosest($$wpref[$vi]->x(),$$wpref[$vi]->y(),$sqref);
+				my $w = $mdconfig{width};
+				my $h = $mdconfig{height};
+				$$wpref[$vi]->clip(0,0,$w,$h);
+				$line->set_ends($$wpref[$vi]->x(),$$sqref[$closest]->x(),$$wpref[$vi]->y(),$$sqref[$closest]->y());
+				$line->immobilize();
+				push(@roads,$line);
+			}
+		}
 	}
+	print "\n";
 	return $numroutes,@roads;
 }
 
@@ -634,10 +658,6 @@ sub squareSort {
 		push(@$i,Points::getDist($origin->x(),$origin->y(),$_->x(),$_->y()));
 	}
 	my ($sorteda,$index) = listSort($i,@a);
-	use Data::Dumper;
-	print Dumper @$sorteda;
-	print Dumper @$index;
-	exit(0);
 	if ($returnindex) { return @$index; }
 	else { return @$sorteda; }
 }
@@ -673,13 +693,71 @@ sub listMerge {
 			}
 		} elsif (@$left) {
 			push(@oa,shift(@$left));
-			if (@$lind) { push(@oi,@$lind); }
+			if (@$lind) { push(@oi,shift(@$lind)); }
 		} elsif (@$right) {
 			push(@oa,shift(@$right));
-			if (@$rind) { push(@oi,@$rind); }
+			if (@$rind) { push(@oi,shift(@$rind)); }
 		}
 	}
 	return \@oa,\@oi;
+}
+
+sub linkNearest {
+	my ($idnum,$here,$name,$fraction,@sortedlist) = @_;
+	my $line = Segment->new($idnum);
+	$line->name($name);
+	$line->set_ends($here->x(),$sortedlist[0]->x(),$here->y(),$sortedlist[0]->y());
+	if ($debug > 1) { print "Running " . $here->id() . ":\n"; } else { print "."; }
+	my $lowdist = $line->length();
+	foreach my $i (1 .. $#sortedlist) { # start at 1 because we just found the distance to 0.
+		my $testdist = Points::getDist($line->ox(),$line->oy(),$sortedlist[$i]->x(),$sortedlist[$i]->y(),0);
+		if ($testdist < $lowdist * $fraction and $testdist > 1) { # prevent excessive moves, and moves of end to origin.
+			my $dist = Points::perpDist($sortedlist[$i]->x(),$sortedlist[$i]->y(),$line->ox(),$line->oy(),$line->ex(),$line->ey());
+			if ($dist < 25) {
+				print "Moving endpoint from (" . $line->ex() . "," . $line->ey() . ") to (" . $sortedlist[$i]->x() . "," . $sortedlist[$i]->y() . ").\n" if ($debug > 3);
+				$line->move_endpoint($sortedlist[$i]->x(),$sortedlist[$i]->y());
+				$lowdist = $line->length();
+			} else { 
+				print "Perpdist: $dist (line not moved)\n" if ($debug > 3);
+			}
+		} else {
+			printf("Test: %.2f vs %.2f\n",$testdist,$lowdist * $fraction) if ($debug > 3);
+		}
+	}
+	return $line;
+}
+
+sub connectWaypoints {
+	my ($sqref,$wpref,$contype) = @_;
+	my @roads;
+
+	return @roads;
+}
+
+sub setMDConf {
+	my $changes = 0;
+	my $spin = 0;
+	while (@_ and $spin < 10) {
+		my $key = shift;
+		my $value = shift;
+		$spin++;
+		unless (defined $value) { return $changes; }
+		$mdconfig{$key} = $value;
+#		print "k: $key v: $mdconfig{$key} ... ";
+	}
+	return $changes;
+}
+
+sub getMDConf {
+	my $key = shift;
+	print "Seeking $key...";
+	return $mdconfig{$key};
+}
+
+sub getCenter {
+	my $x = $mdconfig{centerx};
+	my $y = $mdconfig{cetnery};
+	return $x,$y;
 }
 
 1;

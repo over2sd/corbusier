@@ -6,7 +6,7 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between );
+our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest );
 
 use List::Util qw( min max );
 
@@ -130,5 +130,50 @@ sub between {
 	}
 	return 1; # in range
 }
+
+sub nround {
+	my ($prec,$value) = @_;
+	use Math::Round qw( nearest );
+	my $target = 1;
+	while ($prec > 0) { $target /= 10; $prec--; }
+	while ($prec < 0) { $target *= 10; $prec++; } # negative precision gives 10s, 100s, etc.
+	if ($debug) { print "Value $value rounded to $target: " . nearest($target,$value) . ".\n"; }
+	return nearest($target,$value);
+}
+
+sub findClosest {
+	my ($v,@ordered) = @_;
+	if ($debug > 0) {
+		use Data::Dumper;
+		print ">>".Dumper @ordered;
+		print "($v)<<";
+	}
+	unless (defined $ordered[$#ordered] and defined $v) {
+		use Carp qw( croak );
+		my @loc = caller(0);
+		my $line = $loc[2];
+		@loc = caller(1);
+		my $file = $loc[1];
+		my $func = $loc[3];
+		croak("FATAL: findClosest was not sent a \$SCALAR and an \@ARRAY as required from line $line of $func in $file. Caught");
+		return -1;
+	}
+	my $i = 0;
+	my $diffunder = $v;
+	while ($i < scalar @ordered) {
+		print ":$i:" if $debug > 0;
+		if ($ordered[$i] < $v) {
+			$diffunder = $v - $ordered[$i];
+			$i++;
+			next;
+		} else {
+			my $diffover = $ordered[$i] - $v;
+			if ($diffover > $diffunder) { return $i - 1; }
+			return $i;
+		}
+	}
+	return -1;
+}
+
 
 1;

@@ -4,3 +4,4 @@ Add an option for branchmap to generate a ring for town center instead of a grou
 Let a list of exit vertices be passed to genmap/branchmap so that maps can be generated in sections and connect to each other.
 branchSides using addSideHere should check if its origin point is actually on the line. That's why I made the improved intersection functions, though I'd forgotten it by the time I finished...
 Add a function that will generate the central squares, since what I have now doesn't seem to produce squares that are always connected.
+??? If making a starry ring center and #waypoints=#squares, set base and range narrowly, halfway between azimuths?

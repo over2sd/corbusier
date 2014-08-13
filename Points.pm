@@ -4,7 +4,7 @@ use strict;
 package Vertex;
 
 sub new {
-	my ($class,$i,$n,$x1,$y1,$z1) = @_;
+	my ($class,$i,$n,$x1,$y1,$z1,%meta) = @_;
 	my $self = {
         identity => ($i or 0),
         moniker => ($n or 'Unnamed'),
@@ -12,7 +12,8 @@ sub new {
         origin_y => ($y1 or 0),
         origin_z => ($z1 or 0),
 		class => "point",
-        immobile => 0
+        immobile => 0,
+		metadata => (%meta or {})
 	};
 	bless $self,$class;
 	return $self;
@@ -63,10 +64,8 @@ sub move {
 
 sub roundLoc {
 	my ($self,$prec) = @_;
-	use Math::Round qw( nearest );
-	my $target = 1;
-	while ($prec > 0) { $target /= 10; $prec--; }
-	$self->move(nearest($target,$self->{origin_x}),nearest($target,$self->{origin_y}));
+	use Common qw( nround );
+	$self->move(nround($prec,$self->{origin_x}),nround($prec,$self->{origin_y}));
 	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n"; }
 }
 
@@ -106,6 +105,19 @@ sub clip {
 	$x = ($x > $maxx ? $maxx : ($x < $minx ? $minx : $x));
 	$y = ($y > $maxy ? $maxy : ($y < $miny ? $miny : $y));
 	$self->move($x,$y);
+}
+
+sub getMeta {
+	my ($self,$key) = @_;
+	return $self->{metadata}{$key};
+}
+
+sub setMeta {
+	my ($self,$key,$value) = @_;
+	unless (defined $value) { return -1; }
+#	print "Setting metadata $key to $value.\n";
+	($self->{metadata}{$key} = $value) or return 1;
+	return 0;
 }
 
 ############################### Segment Library ################################
@@ -341,10 +353,8 @@ sub set_ends {
 
 sub roundLoc {
 	my ($self,$prec) = @_;
-	use Math::Round qw( nearest );
-	my $target = 1;
-	while ($prec > 0) { $target /= 10; $prec--; }
-	$self->set_ends(nearest($target,$self->{origin_x}),nearest($target,$self->ex()),nearest($target,$self->{origin_y}),nearest($target,$self->ey()),nearest($target,$self->{origin_z}),nearest($target,$self->ez()));
+	use Common qw( nround );
+	$self->set_ends(nround($prec,$self->{origin_x}),nround($prec,$self->ex()),nround($prec,$self->{origin_y}),nround($prec,$self->ey()),nround($prec,$self->{origin_z}),nround($prec,$self->ez()));
 	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . "," . $self->{origin_z} . ")-(" . $self->ex() . "," . $self->ey() . "," . $self->ez() . ").\n"; }
 }
 
@@ -461,7 +471,7 @@ sub findPath {
 
 ############################### Points Library #################################
 package Points;
-use Common qw ( between );
+use Common qw ( between nround );
 use List::Util qw( min );
 use Math::Trig qw( tan pi acos asin );
 use Math::Round qw( round );
@@ -509,7 +519,7 @@ sub getDist {
 }
 
 sub getClosest {
-   if ($debug > 1) { print "getClosest(@_)\n"; }
+   if ($debug > 0) { print "getClosest(@_)\n"; }
     my ($ox,$oy,$ptlr,%exargs) = @_; # origin, reference of list of vertices, hash of extra arguments
 	my @ptlist = @$ptlr;
 	my $ex; my $ey;
@@ -554,11 +564,12 @@ sub choosePointAtDist {
 sub getPointAtDist {
     if ($debug > 1) { print "getPointAtDist(@_)\n"; }
     my ($x,$y,$d,$b,$whole) = @_; ## center/origin x,y; length of line segment; bearing of line segment
-	print "Casting point at $d along $b...\n";
+	if ($debug > 3) { print "Casting point at $d along $b...\n"; }
+	my $p = Vertex->new($uid++);
+	$p->setMeta("azimuth",nround(3,$b));
 	$b -= 90; # 0 for north, not horizon
 	while ($b > 360) { $b-= 360; }
 	while ($b < 0) { $b += 360; }
-	my $p = Vertex->new($uid++);
 	my $rad = pi / 180;
 	my $adj = ($b >= 180 ? 1 : 0);
 	if ($adj) {
@@ -569,6 +580,7 @@ sub getPointAtDist {
     $p->x($x + (cos($b) * $d));
     $p->y($y + (sin($b) * $d));
 	if ($whole) { $p->roundLoc(0); }
+	
     return $p;
 }
 

@@ -11,10 +11,10 @@ use Getopt::Long;
 my %bgfill = ( 'r' => 255, 'g' => 255, 'b' => 255 );
 
 sub mapSeed {
-		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$showtheseed,$offsetx,$offsety,$forcecrossroads) = @_;
+		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$centertype,$showtheseed,$offsetx,$offsety,$forcecrossroads) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
-        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$forcecrossroads);
+        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads);
 #        my @poi = 
 #		print "- $nr routes\n";
 #		foreach my $i (0 .. $#routes) {
@@ -50,6 +50,7 @@ sub main {
 	my $listfn = ''; # filename for list of seeds
 	my $showhelp = 0;
 	my $crossroadssquare = 0; # secondaries and side roads meet larger roads at close to 90 degrees.
+	my $centertype = 0; # type of map to generate -=- default center mode
 							$disp = 1; # for development. TODO: Remove this line when done tweaking generator
     GetOptions(
 		'help' => \$showhelp,
@@ -64,6 +65,7 @@ sub main {
 		'squareint|q' => \$crossroadssquare,
         'ratio|r=i' => \$rat,
         'secondary|s=i' => \$sec,
+		'type|t=i' => \$centertype,
         'max|x=i' => \$max,
         'w=i' => \$w,
         'h=i' => \$h
@@ -81,6 +83,8 @@ sub main {
     } else {
 		my $svg = '';
 		Points::setCornerHeadings($w,$h); # set boundaries for use multiple times.
+		MapDes::setMDConf("width",$w,"height",$h);
+		MapDes::setMDConf("centerx",\(int((0.5 + $w)/2),"centery",int((0.5 + $h)/2)));
 		if ($listfn ne '') {
 			@seedlist = Common::loadSeedsFrom($listfn);
 		}
@@ -90,7 +94,7 @@ sub main {
 			my ($x,$y) = (0,0);
 			my $width = Common::selectWidth($w,scalar(@seedlist));
 			foreach my $seed (@seedlist) {
-				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,$x,$y,$crossroadssquare);
+				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,$x,$y,$crossroadssquare);
 				push(@svglist,$svgstring);
 				$x += $w;
 				if ($x >= $width) {
@@ -103,7 +107,7 @@ sub main {
 				$svg = "$svg$add\n";
 			}
 		} else {
-			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$disp,0,0,$crossroadssquare);
+			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,0,0,$crossroadssquare);
 		}
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
