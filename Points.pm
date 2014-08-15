@@ -133,7 +133,7 @@ package Segment;
 use Common qw ( between );
 
 sub new {
-	my ($class,$i,$n,$x1,$x2,$y1,$y2,$z1,$z2) = @_; # needs ID;
+	my ($class,$i,$n,$x1,$x2,$y1,$y2,$z1,$z2,%meta) = @_; # needs ID;
 	my $self = {
         identity => ($i or 0),
         moniker => ($n or 'Unnamed'),
@@ -143,6 +143,7 @@ sub new {
         distance_x => 0,
         distance_y => 0,
         distance_z => 0,
+		metadata => (%meta or {}),
         immobile => 0
 	};
 	bless $self,$class;
@@ -337,6 +338,19 @@ sub can_move {
     }
     if ($self->{immobile}) { return 0; }
 	return 1;
+}
+
+sub getMeta {
+	my ($self,$key) = @_;
+	return $self->{metadata}{$key};
+}
+
+sub setMeta {
+	my ($self,$key,$value) = @_;
+	unless (defined $value) { return -1; }
+#	print "Setting metadata $key to $value.\n";
+	($self->{metadata}{$key} = $value) or return 1;
+	return 0;
 }
 
 sub immobilize {
@@ -823,6 +837,22 @@ sub interceptFromAz {
 
 sub useRUID {
 	return $uid++;
+}
+
+sub getAzimuths {
+	my ($x,$y,$arref,$end) = @_;
+	unless (ref($arref) eq "ARRAY") { return undef; }
+	unless (defined $end) { $end = "o"; }
+	my @list = @$arref;
+	my @azlist;
+	my $lisv = (ref($list[0]) eq "Vertex");
+	foreach my $p (@list) {
+		my $v = ($lisv ? $p->x() : ("$end" ne "e" ? $p->ox() : $p->ex()));
+		my $w = ($lisv ? $p->y() : ("$end" ne "e" ? $p->oy() : $p->ey()));
+		my $a = getAzimuth($x,$y,$v,$w);
+		push(@azlist,$a);
+	}
+	return @azlist;
 }
 
 1;

@@ -298,9 +298,11 @@ sub branchmap {
 	my $lowindex = 0;
 # place highways #############
 	print "\nPlacing highways..";
-	@rts = growHiw(\@irts,$centertype,\$numroutes);
+	my @exits = castExits($hiw,\@waypoints,getCenter(),\$numroutes,0);
+	my @orts = growHiw(\@exits,\@irts,\$numroutes);
+	push(@rts,@orts);
 #	place secondaries
-	my @secondaries = branchSecondaries($sec,$forcesquare,@rts);
+	my @secondaries = branchSecondaries($sec,$forcesquare,@orts);
 	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
 #place smaller roads
@@ -644,23 +646,40 @@ sub getMDConf {
 sub getCenter {
 	my $x = $mdconfig{centerx};
 	my $y = $mdconfig{centery};
-	print "..Center: ($x,$y)..";
+#	print "..Center: ($x,$y)..";
 	return $x,$y;
 }
 
 sub castExits {
 	my ($qty,$road_aref,$origin_aref,$numroutes,$method) = @_;
+	print "Attempting to cast $qty exits...";
 	my @center = @$origin_aref;
 	my @roads = @$road_aref;
 	my @exits;
+	my $w = $mdconfig{width};
+	my $h = $mdconfig{height};
 	for ($method) {
 	 if (/0/) {
+		my (@exazs,@wpazs);
+		@wpazs = Points::getAzimuths(@center,\@roads);
+		if ($qty <= scalar @roads) {
+			my $offset = rand(30) - 15;
+			foreach (@wpazs) {
+				push(@exazs,$_ + $offset) if (scalar @exazs < $qty);
+			}
+		} else {
+### Brilliant algorithm for distributing exits randomly with gravity toward azimuths of waypoints added goes here.
+		}
+		foreach (@exazs) {
+			my $ev = Points::interceptFromAz($_,$w,$h); # running from center
+			$ev->clip(0,0,$w,$h);
+			$ev->setMeta("azimuth",Points::getAzimuth($w/2,$h/2,$ev->x(),$ev->y()));
+			push(@exits,$ev);
+		}
 	 } else {
 		if (@roads < $qty) {
 			my $bearingrange = 360 / $qty;
 			my $bearingbase = 0;
-			my $w = $mdconfig{width};
-			my $h = $mdconfig{height};
 			while (scalar @exits < $qty) {
 				my $bearing = $bearingbase + rand($bearingrange);
 				my $ev = Points::interceptFromAz($bearing,$w,$h); # running from center
