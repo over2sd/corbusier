@@ -394,16 +394,38 @@ sub intersects { #returns a theoretical intersection, even if neither segment co
 	unless (ref($self) eq 'Segment' and ref($line) eq 'Segment') { return undef; }
 	my ($a,$c) = $self->fparts();
 	my ($b,$d) = $line->fparts();
-	if ($a == $b) { # same slope, parallel
+	print "Parts: $a+$c,$b+$d ... ";
+	unless (defined $a and defined $b) { # some vertical?
+#		print "~";
+		my ($x,$y);
+		unless (defined $a or defined $b) { # both vertical?
+			if (0) { print "[W] Vertical Parallel"; }
+			return undef;
+		} elsif (defined $a) {
+#			print "It's vertical.";
+			$x = $line->ox();
+			$y = $self->f($x);
+		} else {
+#			print "I'm vertical.";
+			$x = $self->ox();
+			$y = $line->f($x);
+		}
+		return $x,$y;
+	} elsif ($a == $b) { # same slope, parallel
+#		print "`";
+		if (0) { print "[W] Parallel"; }
 		unless ($c == $d) { #Not on same path
 			return undef;
 		}
+#	} else {
+#		print "^";
 	}
 	# after Wikipedia:Line-line_intersection#Intersection_of_two_lines_in_the_plane
 	my $x = ($d-$c)/($a-$b);
 	my $y = $a * $x + $c;
-	unless ($y == $b * $x + $d) {
-		if (0) { printf("\t%.2f =/= %.2f\t",$y,$b * $x + $d); }
+	print "((($x,$y)))";
+	unless (nround(10,$y) == nround(10,$b * $x + $d)) { # 10 digits of precision is sufficient for my^H^Hmost purposes.
+		if (1) { printf("\t%.6f =/= %.6f\t",$y,$b * $x + $d); }
 		return undef;
 	} else {
 		return ($x,$y);
@@ -415,6 +437,8 @@ sub partOfMe {
 	my ($self,$v) = @_;
 	unless (ref($self) eq 'Segment' and ref($v) eq 'Vertex') { return 0; }
 	my ($m,$b) = $self->fparts();
+	# vertical line handler:
+	if (not defined $m and $v->x() - $self->ox() < $fuzziness) { return 1; }
 	if (between($v->x(),$self->ox(),$self->ex(),0,$fuzziness)
 	and abs($m * $v->x() + $b - $v->y()) < $fuzziness) {
 		return 1;
@@ -492,18 +516,21 @@ sub findPath {
 
 ############################### Points Library #################################
 package Points;
-use Common qw ( between nround );
+use Common qw ( between nround getColorsbyName );
 use List::Util qw( min );
 use Math::Trig qw( tan pi acos asin );
 use Math::Round qw( round );
 use POSIX qw( floor );
 
 my $debug = 1;
+my $termcolors = 0;
+my $basecolor = "";
+my $funcolor = "";
 my @cornerbearings = (0,0,0,0);
 my $uid = 1; #time() % 1000; # runtime-unique ID counter for vertices
 
 sub pointIsOnLine { # Don't remember the source of this algorithm, but it was given as a formula.
-    if ($debug) { print "pointIsOnLine(@_)"; }
+    if ($debug) { print $funcolor . "pointIsOnLine($basecolor@_$funcolor)$basecolor\n"; }
     my ($x0,$y0,$x1,$y1,$x2,$y2,$fuzziness,$checkrange) = @_; # point, line start, line end, max determinant
 	if (defined $checkrange and $checkrange == 1) {
 		unless (between($x0,$x1,$x2,0,$fuzziness)) { return 0; }
@@ -514,7 +541,7 @@ sub pointIsOnLine { # Don't remember the source of this algorithm, but it was gi
 }
 
 sub findOnLine {
-    if ($debug) { print "findOnLine(@_)\n"; }
+    if ($debug) { print $funcolor . "findOnLine($basecolor@_$funcolor)$basecolor\n"; }
     my ($x1,$y1,$x2,$y2,$frac,$whole) = @_;
     my $dx = $x1 - $x2;
     my $dy = $y1 - $y2;
@@ -527,7 +554,7 @@ sub findOnLine {
 }
 
 sub getDist {
-    if ($debug > 1) { print "getDist(@_)\n"; }
+    if ($debug > 1) { print $funcolor . "getDist($basecolor@_$funcolor)$basecolor\n"; }
     my ($x1,$y1,$x2,$y2,$sides) = @_; # point 1, point 2, return all distances?
     my $dx = $x2 - $x1; # preserving sign for rise/run
     my $dy = $y2 - $y1;
@@ -540,7 +567,7 @@ sub getDist {
 }
 
 sub getClosest {
-   if ($debug > 0) { print "getClosest(@_)\n"; }
+   if ($debug > 1) { print $funcolor . "getClosest($basecolor@_$funcolor)$basecolor\n"; }
     my ($ox,$oy,$ptlr,%exargs) = @_; # origin, reference of list of vertices, hash of extra arguments
 	my @ptlist = @$ptlr;
 	my $ex; my $ey;
@@ -565,7 +592,7 @@ sub getClosest {
 }
 
 sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
-    if ($debug > 1) { print "perpDist(@_)\n"; }
+    if ($debug > 1) { print $funcolor . "perpDist($basecolor@_$funcolor)$basecolor\n"; }
     my ($x0,$y0,$x1,$y1,$x2,$y2) = @_; # point, line start, line end
     my $dx = $x2 - $x1;
     my $dy = $y2 - $y1;
@@ -576,14 +603,14 @@ sub perpDist { # Algorithm source: Wikipedia/Distance_from_a_point_to_a_line
 }
 
 sub choosePointAtDist {
-    if ($debug > 1) { print "choosePointAtDist(@_)\n"; }
+    if ($debug > 1) { print $funcolor . "choosePointAtDist($basecolor@_$funcolor)$basecolor\n"; }
     my ($x,$y,$dist,$min,$max,$offset,$whole) = @_; ## center/origin x,y; length of line segment; min,max bearing of line; bearing offset
     my $bearing = rand($max - $min) + $min + $offset;
     return getPointAtDist($x,$y,$dist,$bearing,$whole);
 }
 
 sub getPointAtDist {
-    if ($debug > 1) { print "getPointAtDist(@_)\n"; }
+    if ($debug > 1) { print $funcolor . "getPointAtDist($basecolor@_$funcolor)$basecolor\n"; }
     my ($x,$y,$d,$b,$whole) = @_; ## center/origin x,y; length of line segment; bearing of line segment
 	if ($debug > 3) { print "Casting point at $d along $b...\n"; }
 	my $p = Vertex->new($uid++);
@@ -606,14 +633,14 @@ sub getPointAtDist {
 }
 
 sub chooseAHeading {
-    if ($debug) { print "chooseAHeading(@_)\n"; }
+    if ($debug) { print $funcolor . "chooseAHeading($basecolor@_$funcolor)$basecolor\n"; }
     my ($offset,$whole) = @_;
     my $bearing = rand(80) + 5 + $offset;
     return $bearing;
 }
 
 sub getAHeading {
-    if ($debug) { print "getAHeading(@_)\n"; }
+    if ($debug) { print $funcolor . "getAHeading($basecolor@_$funcolor)$basecolor\n"; }
 	# Temporary function for use until I can figure out why the trig-based algorithm isn't giving valid results
 	# This function extrapolates bearing based on relationship to known bearing (slope 1 = 45 degrees) and may not be accurate.
 	# TODO: Fix this!!!
@@ -639,7 +666,7 @@ sub getAHeading {
 
 #This function is not producing correct results. :(
 sub oldGetAHeading {
-    if ($debug) { print "getAHeading(@_)\n"; }
+    if ($debug) { print $funcolor . "getAHeading($basecolor@_$funcolor)$basecolor\n"; }
     my ($dx,$dy,$offset,$whole,$relative) = @_;
     if (not defined $whole) { $whole = 0; }
     if (not defined $relative) { $relative = 1; }
@@ -660,7 +687,7 @@ sub oldGetAHeading {
 
 # after wiki/Law_of_cosines
 sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
-    if ($debug > 1) { print "getAzimuth(@_)\n"; }
+    if ($debug > 1) { print $funcolor . "getAzimuth($basecolor@_$funcolor)$basecolor\n"; }
 	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
 	if (not defined $whole) { $whole = 0; }
 	my ($hyp,$rise,$run) = getDist($cx,$cy,$tx,$ty,1);
@@ -730,7 +757,7 @@ sub costlyRectify {
 }
 
 sub placePoint {
-    if ($debug > 5) { print "placePoint(@_)\n"; }
+    if ($debug > 5) { print $funcolor . "placePoint($basecolor@_$funcolor)$basecolor\n"; }
 	my ($v,$xrange,$xbase,$yrange,$ybase,$listref,$mindist,$maxtries) = @_;
 	my $d = 0;
 	my $j = 0;
@@ -853,6 +880,12 @@ sub getAzimuths {
 		push(@azlist,$a);
 	}
 	return @azlist;
+}
+
+sub enableTermcolors {
+	$termcolors = 1;
+	$basecolor = Common::getColorsbyName("base");
+	$funcolor = Common::getColorsbyName("ltgreen");
 }
 
 1;

@@ -281,6 +281,7 @@ sub branchmap {
 	if ($debug) { print "  Joins: " . $joins . "/" . $mxj . "\n"; }
 	my $needed = 0;
 	my @waypoints;
+	my $unit = 0;
 	my $divisor = $joins;
 	if ($divisor < 2) { # fewer than three junctions
 		$divisor++;
@@ -291,7 +292,7 @@ sub branchmap {
 	if ($divisor < ($hiw / 3)) {
 		$needed = $hiw / 3 - $divisor;
 	}
-	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed);
+	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed,\$unit);
 	# connect all village squares
 	print "debug $numroutes ";
 	my @irts = connectSqs(\@sqs,\@waypoints,$centertype,\$numroutes);
@@ -319,11 +320,12 @@ sub branchmap {
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth), 3 - 2 or 3 central points, (good for river towns?)
 sub genSquares {
 	if ($debug > 1) { print "genSquares(@_)\n" };
-	my ($qty,$centertype,$variance,$waypointsref,$wpqty) = @_;
+	my ($qty,$centertype,$variance,$waypointsref,$wpqty,$unitref) = @_;
 	unless ($qty) { return (); }
 	my $width = $mdconfig{width};
 	my $height = $mdconfig{height};
 	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),int($width/2+0.5),int(0.5+$height/2),int(rand(180)));
+	$$unitref = $unit; # store unit for caller
 	# Possible switch: offset all positions by +/- 1 * $unit?
 	my ($centqty,@squares);
 	if ($centertype == 1 or $centertype == 2) { $centqty = 0;
@@ -405,7 +407,7 @@ sub genSquares {
 sub connectSqs {
 	my ($sqref,$wpref,$centertype,$numroutes) = @_;
 	print "Linking village squares..";
-	print "connectSqs(@_)\n";
+	if ($debug > 1) { print "connectSqs(@_)\n"; }
 	my @roads;
 	# find point closest to center
 	# later, add options to have "center" be closest to one corner, instead, or a random point instead of the most central.
