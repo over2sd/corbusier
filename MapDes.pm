@@ -795,4 +795,44 @@ sub growHiw {
 	return @hiw
 }
 
+=item bendAtBoundBox()
+	Takes a reference to a list of Segments and bends them when they cross the edges of the bounding box (described as minimi\um x, minimum y, maximum x, maximum y).
+	Alters the Segments given so they end at the boundary box, if they cross.
+	Warning: This function assumes a competent caller that passes the bounding box in the proper order, such that each maximum is greater than its minimum.
+	It further assumes that the given list features segments that go from the outside to the inside.
+	Returns a list of Segments representing the portion bent outside the box.
+=cut
+sub bendAtBoundBox {
+	my ($ix,$iy,$ax,$ay,$list,$whole,$numroutes) = @_;
+	my (@ext,@box);
+	my $top = Segment->new(1,"Top",$ix,$ax,$iy,$iy);
+	my $right = Segment->new(0,"Right",$ax,$ax,$iy,$ay);
+	my $bottom = Segment->new(1,"Bottom",$ix,$ax,$ay,$ay);
+	my $left = Segment->new(0,"Left",$ix,$ix,$iy,$ay);
+	if ($ax-$ix > $ay-$iy) { # select order baased on difference between box boundaries
+		push(@box,$top,$bottom,$left,$right);
+	} else {
+		push(@box,$left,$right,$top,$bottom);
+	}
+	foreach (@$list) { # for each item in given list
+		foreach my $b (@box) { # check against each 
+			if ($_->getMeta("bent")) { next; }
+			my ($touches,$tx,$ty) = $_->touches($b);
+			if ($whole) { $tx = nround(0,$tx); $ty = nround(0,$ty); }
+			if ($touches) {
+				my $x = ($b->id() ? ($_->ox() + $tx) / 2 : $_->ox());
+				my $y = ($b->id() ? $_->oy() : ($_->oy() + $ty) / 2);
+				if ($whole) { $x = nround(0,$x); $y = nround(0,$y); }
+				my $line = Segment->new($$numroutes,sprintf("%s-alt",$_->name()));
+				$line->set_ends($x,$tx,$y,$ty);
+				push(@ext,$line);
+				print "^";
+				$_->move_origin_only($tx,$ty);
+				$_->setMeta("bent",1);
+			}
+		}
+	}
+	return @ext
+}
+
 1;

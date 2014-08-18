@@ -322,12 +322,11 @@ sub move_origin_only {
         return 86;
     }
     if (not defined $x or not defined $y) { return 1; }
-    my @end = $self->ex(),$self->ey(),$self->ez();
+	$self->{distance_x} += $self->{origin_x} - $x;
+	$self->{distance_y} += $self->{origin_y} - $y;
     $self->{origin_x} = $x;
     $self->{origin_y} = $y;
-    if (defined $z) { $self->{distance_z} = $z; }
-    my $a = $self->move_endpoint($end[0],$end[1],$end[2]);
-    if ($a) { return 2; }
+    if (defined $z) { $self->{distance_z} += $self->{origin_z} - $z; }
     return 0;
 }
 
@@ -394,7 +393,7 @@ sub intersects { #returns a theoretical intersection, even if neither segment co
 	unless (ref($self) eq 'Segment' and ref($line) eq 'Segment') { return undef; }
 	my ($a,$c) = $self->fparts();
 	my ($b,$d) = $line->fparts();
-	print "Parts: $a+$c,$b+$d ... ";
+#	print "Parts: $a+$c,$b+$d ... ";
 	unless (defined $a and defined $b) { # some vertical?
 #		print "~";
 		my ($x,$y);
@@ -423,7 +422,7 @@ sub intersects { #returns a theoretical intersection, even if neither segment co
 	# after Wikipedia:Line-line_intersection#Intersection_of_two_lines_in_the_plane
 	my $x = ($d-$c)/($a-$b);
 	my $y = $a * $x + $c;
-	print "((($x,$y)))";
+#	print "((($x,$y)))";
 	unless (nround(10,$y) == nround(10,$b * $x + $d)) { # 10 digits of precision is sufficient for my^H^Hmost purposes.
 		if (1) { printf("\t%.6f =/= %.6f\t",$y,$b * $x + $d); }
 		return undef;
