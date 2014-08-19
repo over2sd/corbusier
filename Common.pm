@@ -6,7 +6,7 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest );
+our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest vary );
 
 use List::Util qw( min max );
 
@@ -175,5 +175,15 @@ sub findClosest {
 	return -1;
 }
 
+=item vary()
+	Vary an input ($base) by +/- an amount ($variance).
+	Returns altered input.
+=cut
+sub vary {
+	my ($base,$variance) = @_;
+	$base -= $variance;
+	$base += rand(2 * $variance);
+	return $base;
+}
 
 1;

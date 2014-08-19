@@ -515,7 +515,7 @@ sub findPath {
 
 ############################### Points Library #################################
 package Points;
-use Common qw ( between nround getColorsbyName );
+use Common qw ( between nround getColorsbyName vary );
 use List::Util qw( min );
 use Math::Trig qw( tan pi acos asin );
 use Math::Round qw( round );
@@ -884,87 +884,52 @@ sub getAzimuths {
 
 sub twist {
 	my ($origlin,$div) = @_;
+	unless ($div) { print "[E] Can't divide by 0!\n"; return undef; }
+	unless ($div > 1) { print "[W] Can't divide line into 0-1 segments."; return (); }
+	$div--;
 	print "Length: " . $origlin->length() . "\n";
 	my @letters = ("a".."z","A".."Z",0..9); # Not sure what happens if you split your line into more than 62 pieces, but that is unlikely...
-	my (@points,@lines);
+	my (@bears,@points,@lines);
 	my ($current,$maxaz,$minaz) = (0.00,$origlin->azimuth() + 55,$origlin->azimuth() - 55);
-	my $i = 0;
+	my $i = $origlin->azimuth();
 	my $tp = Vertex->new();
 	my @o = ($origlin->ox(),$origlin->oy());
 	my @t = ($origlin->ex(),$origlin->ey());
-	my $lp = Vertex->new(0,"last",@o);
-	$lp->setMeta("azimuth",$origlin->azimuth() + 180);
+	my $lp = Vertex->new(0,"last",@t);
+	my $ep = Vertex->new(0,"first",@o);
 	print "Loop:";
-	while ($i < $div) {
-		print "<$i>";
-		my $maxdist = getDist($lp->loc(),@t);
-		print "my \$range = ($maxdist) * (($i + 1) / ($div - $i));\n";
-		my $range = ($maxdist) * (($i + 1) / (($div - $i++) or $i));
-		print "Range: $range \n";
-		my $dist = rand($range);
-		$current += $dist;
-		my ($valid,$tries,$vt,$vo) = (0,10,0,0);
-		my $adjust = 0;
-		my $corrections = 0;
-		until ($valid) {
-			my $try_az = rand(50) - 30 + $adjust;
-			if ($try_az < 5) { $try_az -= 10; }
-			$try_az += 0;
-			print "Trying to cast along $try_az at $dist: ";
-			$tp = getPointAtDist($lp->loc(),$dist,$try_az + $lp->getMeta("azimuth"),1);
-			$valid = 1; $vo = 0; $vt = 0;
-			my $oaz = getAzimuth($tp->loc(),@o,1,1);
-			print "$minaz<$oaz<$maxaz...";
-			if ($oaz > $maxaz) {
-				$valid = 0;
-				$adjust += $maxaz - $oaz;
-				$vo = 1;
-			} elsif ($oaz < $minaz) {
-				$valid = 0;
-				$adjust += $oaz - $minaz;
-				$vo = -1;
-			}
-			my $taz = getAzimuth(@t,$tp->loc(),1);
-			print "$minaz<$taz<$maxaz...\n";
-			if ($taz > $maxaz) {
-				$valid = 0;
-				$adjust += $maxaz - $taz;
-				$vt = 1;
-			} elsif ($taz < $minaz) {
-				$valid = 0;
-				$adjust += $taz - $minaz;
-				$vt = -1;
-			}
-			$tries--;
-			unless ($tries) {
-				print "Forced correction...";
-				my $line = Segment->new(0,"boo",$tp->x(),$lp->x(),$tp->y(),$lp->y());
-				my $bp; my @s;
-				if ($vo == 0 and $vt) {					
-					$bp = getPointAtDist(@t,$maxdist,(55 - $corrections) * $vt,1);
-					@s = @t;
-				} elsif ($vt == 0 and $vo) {
-					$bp = getPointAtDist(@o,$maxdist,(55 - $corrections) * $vo,1);
-					@s = @o;
-				} else {
-					print "Areh? :$vo:$vt:\n"; exit(-9);
-				}
-				my $bound = Segment->new(0,"youshallnotpass",@s[0],$bp->x(),$s[1],$bp->y());
-				my ($touch,$x,$y) = $bound->touches($line);
-				unless ($touch) { print "Couldn't rectify. Better programming needed.\n"; exit(0); }
-				$tp->move($x,$y);
-				$tp->setMeta("azimuth",getAzimuth($lp->loc(),$tp->loc(),1));
-				$valid = 1;
-				$corrections++;
-			}
+	for (0 .. int($div/2) - 1) {
+		$i = vary($i,5 + $_);
+		if ($i < $minaz) {
+			print "+";
+			my $var = $minaz - $i;
+			$i = $minaz + $var;
+		} elsif ($i > $maxaz) {
+			print "-";
+			my $var = $i - $maxaz;
+			$i = $maxaz - $var;
 		}
-		push(@points,$tp);
-		$lp->move($tp->loc());
-		$lp->setMeta("azimuth",$tp->getMeta("azimuth"));
-		print "Azimuth now " . $lp->getMeta("azimuth") . "\n";
+		printf("Storing: %.3f\n",$i);
+		push(@bears,$i);
 	}
-	my $ep = Vertex->new(-1,"end",$origlin->ox(),$origlin->oy());
-	foreach (@points) {
+	foreach (0 .. $#bears) {
+		my $dist = $origlin->length() * (($_ + 1)/($div + 2));
+		$tp = getPointAtDist($lp->loc(),$dist,$bears[$_],1);
+		print "$_: " . $tp->describe(1) . "\n";
+		push(@points,$tp);
+	}
+	my $dist = (1/$div) * $origlin->length();
+	foreach (int($div/2) .. $div - 1) {
+		$lp->move($tp->loc());
+		$i = getAzimuth(@t,$lp->loc(),1);
+		if ($i > $maxaz) { print "+"; $i = $maxaz - (5 + ($div - $_)); }
+		elsif ($i < $minaz) { print "-"; $i = $minaz + (5 + ($div - $_)); }
+		$i = vary($i,5 + ($div - $_));
+		$tp = getPointAtDist($lp->loc(),$dist,$i,1);
+		print "$_: " . $tp->describe(1) . "\n";
+		push(@points,$tp);
+	}
+	foreach (reverse @points) {
 		my $line = Segment->new($origlin->id(),sprintf("%s-%s",$origlin->name(),shift @letters));
 		$line->set_ends($_->x(),$ep->x(),$_->y(),$ep->y());
 		push(@lines,$line);

@@ -334,3 +334,72 @@ exit(0);
 		push(@points,$wp);
 		$current += $p;
 	}
+
+
+
+		print "<$i>";
+		my $maxdist = getDist($lp->loc(),@t);
+		print "my \$range = ($maxdist) * (($i + 1) / ($div - $i));\n";
+		my $range = ($maxdist) * (($i + 1) / (($div - $i++) or $i));
+		print "Range: $range \n";
+		my $dist = rand($range);
+		$current += $dist;
+		my ($valid,$tries,$vt,$vo) = (0,10,0,0);
+		my $adjust = 0;
+		my $corrections = 0;
+		until ($valid) {
+			my $try_az = rand(50) - 30 + $adjust;
+			if ($try_az < 5) { $try_az -= 10; }
+			$try_az += 0;
+			print "Trying to cast along $try_az at $dist: ";
+			$tp = getPointAtDist($lp->loc(),$dist,$try_az + $lp->getMeta("azimuth"),1);
+			$valid = 1; $vo = 0; $vt = 0;
+			my $oaz = getAzimuth($tp->loc(),@o,1,1);
+			print "$minaz<$oaz<$maxaz...";
+			if ($oaz > $maxaz) {
+				$valid = 0;
+				$adjust += $maxaz - $oaz;
+				$vo = 1;
+			} elsif ($oaz < $minaz) {
+				$valid = 0;
+				$adjust += $oaz - $minaz;
+				$vo = -1;
+			}
+			my $taz = getAzimuth(@t,$tp->loc(),1);
+			print "$minaz<$taz<$maxaz...\n";
+			if ($taz > $maxaz) {
+				$valid = 0;
+				$adjust += $maxaz - $taz;
+				$vt = 1;
+			} elsif ($taz < $minaz) {
+				$valid = 0;
+				$adjust += $taz - $minaz;
+				$vt = -1;
+			}
+			$tries--;
+			unless ($tries) {
+				print "Forced correction...";
+				my $line = Segment->new(0,"boo",$tp->x(),$lp->x(),$tp->y(),$lp->y());
+				my $bp; my @s;
+				if ($vo == 0 and $vt) {					
+					$bp = getPointAtDist(@t,$maxdist,(55 - $corrections) * $vt,1);
+					@s = @t;
+				} elsif ($vt == 0 and $vo) {
+					$bp = getPointAtDist(@o,$maxdist,(55 - $corrections) * $vo,1);
+					@s = @o;
+				} else {
+					print "Areh? :$vo:$vt:\n"; exit(-9);
+				}
+				my $bound = Segment->new(0,"youshallnotpass",@s[0],$bp->x(),$s[1],$bp->y());
+				my ($touch,$x,$y) = $bound->touches($line);
+				unless ($touch) { print "Couldn't rectify. Better programming needed.\n"; exit(0); }
+				$tp->move($x,$y);
+				$tp->setMeta("azimuth",getAzimuth($lp->loc(),$tp->loc(),1));
+				$valid = 1;
+				$corrections++;
+			}
+		}
+		push(@points,$tp);
+		$lp->move($tp->loc());
+		$lp->setMeta("azimuth",$tp->getMeta("azimuth"));
+		print "Azimuth now " . $lp->getMeta("azimuth") . "\n";
