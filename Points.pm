@@ -687,7 +687,7 @@ sub oldGetAHeading {
 # after wiki/Law_of_cosines
 sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
     if ($debug > 1) { print $funcolor . "getAzimuth($basecolor@_$funcolor)$basecolor\n"; }
-	my ($cx,$cy,$tx,$ty,$whole) = @_; # center x/y, target x/y
+	my ($cx,$cy,$tx,$ty,$whole,$relative) = @_; # center x/y, target x/y
 	if (not defined $whole) { $whole = 0; }
 	my ($hyp,$rise,$run) = getDist($cx,$cy,$tx,$ty,1);
 	if ($hyp == 0) { print "\n[W] Identical point!\n"; return 0; }
@@ -708,6 +708,7 @@ sub getAzimuth { # north azimuth (point $cx,0) is 0 degrees.
 	}
 	if ($debug > 1) { printf("Angle: %.2f Opp: %.2f Hyp: %.2f\n",$angle,$opp,$hyp); }
 	if ($whole) { $angle = floor($angle + 0.5); }
+	if ($relative and $angle > 180) { $angle -= 360; }
 	return $angle;
 }
 
@@ -879,6 +880,99 @@ sub getAzimuths {
 		push(@azlist,$a);
 	}
 	return @azlist;
+}
+
+sub twist {
+	my ($origlin,$div) = @_;
+	print "Length: " . $origlin->length() . "\n";
+	my @letters = ("a".."z","A".."Z",0..9); # Not sure what happens if you split your line into more than 62 pieces, but that is unlikely...
+	my (@points,@lines);
+	my ($current,$maxaz,$minaz) = (0.00,$origlin->azimuth() + 55,$origlin->azimuth() - 55);
+	my $i = 0;
+	my $tp = Vertex->new();
+	my @o = ($origlin->ox(),$origlin->oy());
+	my @t = ($origlin->ex(),$origlin->ey());
+	my $lp = Vertex->new(0,"last",@o);
+	$lp->setMeta("azimuth",$origlin->azimuth() + 180);
+	print "Loop:";
+	while ($i < $div) {
+		print "<$i>";
+		my $maxdist = getDist($lp->loc(),@t);
+		print "my \$range = ($maxdist) * (($i + 1) / ($div - $i));\n";
+		my $range = ($maxdist) * (($i + 1) / (($div - $i++) or $i));
+		print "Range: $range \n";
+		my $dist = rand($range);
+		$current += $dist;
+		my ($valid,$tries,$vt,$vo) = (0,10,0,0);
+		my $adjust = 0;
+		my $corrections = 0;
+		until ($valid) {
+			my $try_az = rand(50) - 30 + $adjust;
+			if ($try_az < 5) { $try_az -= 10; }
+			$try_az += 0;
+			print "Trying to cast along $try_az at $dist: ";
+			$tp = getPointAtDist($lp->loc(),$dist,$try_az + $lp->getMeta("azimuth"),1);
+			$valid = 1; $vo = 0; $vt = 0;
+			my $oaz = getAzimuth($tp->loc(),@o,1,1);
+			print "$minaz<$oaz<$maxaz...";
+			if ($oaz > $maxaz) {
+				$valid = 0;
+				$adjust += $maxaz - $oaz;
+				$vo = 1;
+			} elsif ($oaz < $minaz) {
+				$valid = 0;
+				$adjust += $oaz - $minaz;
+				$vo = -1;
+			}
+			my $taz = getAzimuth(@t,$tp->loc(),1);
+			print "$minaz<$taz<$maxaz...\n";
+			if ($taz > $maxaz) {
+				$valid = 0;
+				$adjust += $maxaz - $taz;
+				$vt = 1;
+			} elsif ($taz < $minaz) {
+				$valid = 0;
+				$adjust += $taz - $minaz;
+				$vt = -1;
+			}
+			$tries--;
+			unless ($tries) {
+				print "Forced correction...";
+				my $line = Segment->new(0,"boo",$tp->x(),$lp->x(),$tp->y(),$lp->y());
+				my $bp; my @s;
+				if ($vo == 0 and $vt) {					
+					$bp = getPointAtDist(@t,$maxdist,(55 - $corrections) * $vt,1);
+					@s = @t;
+				} elsif ($vt == 0 and $vo) {
+					$bp = getPointAtDist(@o,$maxdist,(55 - $corrections) * $vo,1);
+					@s = @o;
+				} else {
+					print "Areh? :$vo:$vt:\n"; exit(-9);
+				}
+				my $bound = Segment->new(0,"youshallnotpass",@s[0],$bp->x(),$s[1],$bp->y());
+				my ($touch,$x,$y) = $bound->touches($line);
+				unless ($touch) { print "Couldn't rectify. Better programming needed.\n"; exit(0); }
+				$tp->move($x,$y);
+				$tp->setMeta("azimuth",getAzimuth($lp->loc(),$tp->loc(),1));
+				$valid = 1;
+				$corrections++;
+			}
+		}
+		push(@points,$tp);
+		$lp->move($tp->loc());
+		$lp->setMeta("azimuth",$tp->getMeta("azimuth"));
+		print "Azimuth now " . $lp->getMeta("azimuth") . "\n";
+	}
+	my $ep = Vertex->new(-1,"end",$origlin->ox(),$origlin->oy());
+	foreach (@points) {
+		my $line = Segment->new($origlin->id(),sprintf("%s-%s",$origlin->name(),shift @letters));
+		$line->set_ends($_->x(),$ep->x(),$_->y(),$ep->y());
+		push(@lines,$line);
+		$ep = $_;
+	}
+	$origlin->move_origin_only($ep->x(),$ep->y());
+	$origlin->name(sprintf("%s-%s",$origlin->name(),shift @letters));
+	return @lines;
 }
 
 sub enableTermcolors {

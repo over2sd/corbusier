@@ -311,3 +311,26 @@ exit(0);
 	push(@rts,@irts);
 	return $numroutes,@rts;
 }
+
+
+
+	print "Fracs: @fracs \n";
+	my $i = scalar @fracs;
+	my $lastshift = 0;
+	while ($i > 0) {
+		my $range = (1.00 - $current) * $fracs[--$i];
+		my $p = rand($range);
+		my $dist = $p + $current;
+		my $off = 1 / (abs($div/2 - $i) + 1);
+		my $maxshift = 60 * $off;
+		print "Max: $maxshift \n";
+		my $thisshift = rand(60) - 30 + $lastshift;
+		if ($thisshift > $maxshift / 3) { $thisshift = $maxshift - ($thisshift - $maxshift); }
+		if ($thisshift < 0 - $maxshift / 3) { $thisshift = $thisshift + (0 - $maxshift - $thisshift); }
+		$thisshift += $origlin->azimuth() - 180;
+		my $wp = getPointAtDist($origlin->ox(),$origlin->oy(),$dist * $origlin->length(),$thisshift,1);
+		$lastshift = $origlin->azimuth() - $wp->getMeta("azimuth");
+		print " $i: $lastshift)\n";
+		push(@points,$wp);
+		$current += $p;
+	}

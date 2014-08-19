@@ -809,7 +809,7 @@ sub bendAtBoundBox {
 	my $right = Segment->new(0,"Right",$ax,$ax,$iy,$ay);
 	my $bottom = Segment->new(1,"Bottom",$ix,$ax,$ay,$ay);
 	my $left = Segment->new(0,"Left",$ix,$ix,$iy,$ay);
-	if ($ax-$ix > $ay-$iy) { # select order baased on difference between box boundaries
+	if ($ax-$ix > $ay-$iy) { # select order based on difference between box boundaries
 		push(@box,$top,$bottom,$left,$right);
 	} else {
 		push(@box,$left,$right,$top,$bottom);
