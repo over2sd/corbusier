@@ -69,6 +69,15 @@ sub move {
     return 0;
 }
 
+sub wobble {
+	use Common qw( vary );
+	my ($self,$variance) = @_;
+	$self->{origin_x} = Common::vary($self->{origin_x},$variance);
+	$self->{origin_y} = Common::vary($self->{origin_y},$variance);
+	unless ($self->{origin_z} == 0) { $self->{origin_z} = Common::vary($self->{origin_z},$variance); }
+	return 0;
+}
+
 sub roundLoc {
 	my ($self,$prec) = @_;
 	use Common qw( nround );
@@ -456,6 +465,20 @@ sub touches { # returns an actual intersection, or undef if the lines don't touc
 	# (intersect is not valid unless does it touch? == 1) Included in all returns in case caller wants to extend a lin to the intersection.
 }
 
+sub origin {
+	my ($self,$use_z) = @_;
+	my @loc = ($self->{origin_x},$self->{origin_y});
+	if ($use_z) { push(@loc,$self->{origin_z}); }
+	return @loc;
+}
+
+sub endpoint {
+	my ($self,$use_z) = @_;
+	my @loc = ($self->ex(),$self->ey());
+	if ($use_z) { push(@loc,$self->ez()); }
+	return @loc;
+}
+
 sub describe {
     my ($self,$vv,$showz) = @_;
     unless (defined $vv) { $vv = 0 };
@@ -540,7 +563,7 @@ sub pointIsOnLine { # Don't remember the source of this algorithm, but it was gi
 }
 
 sub findOnLine {
-    if ($debug) { print $funcolor . "findOnLine($basecolor@_$funcolor)$basecolor\n"; }
+    if ($debug > 2) { print $funcolor . "findOnLine(" . ($debug > 7 ? "$basecolor@_$funcolor" : "") . ")$basecolor\n"; }
     my ($x1,$y1,$x2,$y2,$frac,$whole) = @_;
     my $dx = $x1 - $x2;
     my $dy = $y1 - $y2;
@@ -887,7 +910,6 @@ sub twist {
 	unless ($div) { print "[E] Can't divide by 0!\n"; return undef; }
 	unless ($div > 1) { print "[W] Can't divide line into 0-1 segments."; return (); }
 	$div--;
-	print "Length: " . $origlin->length() . "\n";
 	my @letters = ("a".."z","A".."Z",0..9); # Not sure what happens if you split your line into more than 62 pieces, but that is unlikely...
 	my (@bears,@points,@lines);
 	my ($current,$maxaz,$minaz) = (0.00,$origlin->azimuth() + 55,$origlin->azimuth() - 55);
@@ -897,7 +919,6 @@ sub twist {
 	my @t = ($origlin->ex(),$origlin->ey());
 	my $lp = Vertex->new(0,"last",@t);
 	my $ep = Vertex->new(0,"first",@o);
-	print "Loop:";
 	for (0 .. int($div/2) - 1) {
 		$i = vary($i,5 + $_);
 		if ($i < $minaz) {
@@ -909,13 +930,11 @@ sub twist {
 			my $var = $i - $maxaz;
 			$i = $maxaz - $var;
 		}
-		printf("Storing: %.3f\n",$i);
 		push(@bears,$i);
 	}
 	foreach (0 .. $#bears) {
 		my $dist = $origlin->length() * (($_ + 1)/($div + 2));
 		$tp = getPointAtDist($lp->loc(),$dist,$bears[$_],1);
-		print "$_: " . $tp->describe(1) . "\n";
 		push(@points,$tp);
 	}
 	my $dist = (1/$div) * $origlin->length();
@@ -926,7 +945,6 @@ sub twist {
 		elsif ($i < $minaz) { print "-"; $i = $minaz + (5 + ($div - $_)); }
 		$i = vary($i,5 + ($div - $_));
 		$tp = getPointAtDist($lp->loc(),$dist,$i,1);
-		print "$_: " . $tp->describe(1) . "\n";
 		push(@points,$tp);
 	}
 	foreach (reverse @points) {

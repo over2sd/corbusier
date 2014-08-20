@@ -192,7 +192,7 @@ sub adjustSideRoad {
 =cut
 sub branchSecondaries {
 	if ($debug) { print "branchSecondaries(@_);"; }
-	my ($secondratio,$allperp,@bigroads) = @_;
+	my ($secondratio,$allperp,$factor,@bigroads) = @_;
 	my @smallroads;
 	foreach my $r (@bigroads) {
 #	foreach highway:
@@ -206,7 +206,9 @@ sub branchSecondaries {
 #		choose a point on highway
 			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),(($posrange/3)+rand($posrange)+($posrange*$i)));
 #		choose a distance for the road to extend
-			my $len = int((rand($r->length()/6)+$r->length()/6)+10);
+#			my $len = int((rand($r->length()/6)+$r->length()/6)+10) * ($factor or 1);
+			my $len = (Points::getDist($intersection->loc(),getCenter(),1) + $r->length() * $factor) / 2;
+			$len = int(rand($len) + 10);
 			addSideHere($intersection,$sideroad,$len,($allperp ? 3 : (rand(8) > 7.0 ? 0 : 2)),$bear,75); # 100=chance of doubling?
 #		(check for bad juxtapositions?)
 			adjustSideRoad($sideroad,20,@smallroads);
@@ -224,6 +226,7 @@ sub branchSides {
 # for each road
 	my $pos = 0.5;
 	foreach my $r (@bigroads) {
+		unless (ref($r) eq "Segment") { print "[E] Not a road (" . ref($r) . ")in branchSides()!"; exit(-4); }
 # range is 1/(ratio*2), because we'll be putting a range between each range for roads, to keep the roads far enough apart
 		my $range = 1/(($ratio or 1) * 2);
 		foreach my $i (0 .. $ratio - 1) {
@@ -303,7 +306,7 @@ sub branchmap {
 	my @orts = growHiw(\@exits,\@irts,\$numroutes);
 	push(@rts,@orts);
 #	place secondaries
-	my @secondaries = branchSecondaries($sec,$forcesquare,@orts);
+	my @secondaries = branchSecondaries($sec,$forcesquare,1,@orts);
 	$numroutes += scalar(@secondaries);
 	push(@rts,@secondaries);
 #place smaller roads
@@ -545,49 +548,9 @@ sub squareSort {
 	foreach (@a) {
 		push(@$i,Points::getDist($origin->x(),$origin->y(),$_->x(),$_->y()));
 	}
-	my ($sorteda,$index) = listSort($i,@a);
+	my ($sorteda,$index) = Common::listSort($i,@a);
 	if ($returnindex) { return @$index; }
 	else { return @$sorteda; }
-}
-
-sub listSort {
-	my ($index,@array) = @_;
-	if (@array <= 1) { return \@array,$index; } # already sorted if length 0-1
-	unless (defined $index) { $index = (); }
-	my (@la,@ra,@li,@ri);
-	my $mid = floor(@array/2) - 1;
-#	print "Trying: $mid/$#array/" . $#{$index} . "\n";
-	@la = ($mid <= $#array ? @array[0 .. $mid] : @la);
-	@ra = ($mid + 1 <= $#array ? @array[$mid + 1 .. $#array] : @ra);
-	@li = ($mid <= $#{$index} ? @$index[0 .. $mid] : @li);
-	@ri = ($mid + 1 <= $#{$index} ? @$index[$mid + 1 .. $#{$index}] : @ri);
-	my ($la,$li) = listSort(\@li,@la);
-	my ($ra,$ri) = listSort(\@ri,@ra);
-	my ($outa,$outi) = listMerge($la,$ra,$li,$ri);
-	return ($outa,$outi);
-}
-
-sub listMerge {
-	my ($left,$right,$lind,$rind) = @_;
-	my (@oa,@oi);
-	while (@$left or @$right) {
-		if (@$left and @$right) {
-			if (@$lind[0] < @$rind[0]) {
-				push(@oa,shift(@$left));
-				push(@oi,shift(@$lind));
-			} else {
-				push(@oa,shift(@$right));
-				push(@oi,shift(@$rind));
-			}
-		} elsif (@$left) {
-			push(@oa,shift(@$left));
-			if (@$lind) { push(@oi,shift(@$lind)); }
-		} elsif (@$right) {
-			push(@oa,shift(@$right));
-			if (@$rind) { push(@oi,shift(@$rind)); }
-		}
-	}
-	return \@oa,\@oi;
 }
 
 sub linkNearest {
@@ -833,6 +796,84 @@ sub bendAtBoundBox {
 		}
 	}
 	return @ext
+}
+
+sub beltPreprocess {
+	my ($href,@array) = @_;
+	unless (ref($href) eq "HASH") { print "[E] beltPreprocess passed " . ref($href) . " instead of HASH."; unless ($mdconfig{errorsarefatal}) { return; } else { exit(-3); }}
+	# TODO: sanity checking goes here
+	foreach (0 .. $#array) {
+		my $spoke = sprintf("t%02d",$_); # maximum 100 spokes before key behavior is unpredictable
+		my $a = $array[$_];
+		unless (ref($a) eq "Segment") { print "[E] beltPreprocess array position $_ is " . ref($a) . " instead of Segment."; unless ($mdconfig{errorsarefatal}) { return; } else { exit(-4); }}
+		my $p = Vertex->new(0,"temporary",$a->origin(1));
+		push(@{$$href{$spoke}},$p);
+	}
+}
+
+sub tieredBelts {
+	my ($ratio,$maxda,$numroutes,$twist,$sorted,@tier) = @_;
+	my (@belt,@lines);
+	print "$$numroutes ";
+	unless ($sorted) {
+		my $i = ();
+		foreach (@tier) {
+			$_->setMeta("azimuth",Points::getAzimuth(getCenter(),$_->x(),$_->y()));
+			push(@$i,$_->getMeta("azimuth"));
+		}
+		my ($sorteda,$index) = Common::listSort($i,@tier);
+		@tier = @$sorteda;
+	}
+	my $lastpoint = $tier[$#tier];
+	my $lastaz = Points::getAzimuth(getCenter(),$tier[$#tier]->loc()) - 360; # make the subtraction simpler
+	foreach (@tier) {
+		my $thisaz = Points::getAzimuth(getCenter(),$_->loc());
+		my $deltaaz = $thisaz - $lastaz;
+		if ($deltaaz <= $maxda) {
+			print "D";
+			my ($v,$w,$x,$y) = ($lastpoint->loc(0),$_->describe(0));
+			my $line = Segment->new($$numroutes,sprintf("Belt %d",++$$numroutes),$v,$x,$w,$y);
+			push(@lines,$line);
+		} elsif ($deltaaz < 2 * $maxda) {
+			print "I";
+			my $base = Points::getDist(getCenter(),$lastpoint->loc(),1);
+			my $bound = Points::getDist(getCenter(),$_->loc(),1);
+			my $dist = vary(($base + $bound) / 2,($maxda % 10) + 25);
+			my $midbear = $lastaz + (($thisaz - $lastaz) / 2);
+			my ($v,$w,$x,$y) = ($lastpoint->loc(),$_->loc());
+			my $midpoint = Vertex->new(Points::useRUID(),"temporary",($v + $x)/2,($w + $y)/2);
+			$midpoint->wobble($maxda/2);
+			($v,$w,$x,$y) = ($midpoint->loc(),$lastpoint->loc());
+			my $old = Segment->new($$numroutes,sprintf("Belt %da",$$numroutes++),$x,$v,$y,$w);
+			($x,$y) = $_->loc();
+			my $new = Segment->new($$numroutes,sprintf("Belt %db",$$numroutes++ - 1),$v,$x,$w,$y);
+			push(@lines,$old,$new);
+		} else {
+			print "S";
+			my $dist = abs(Points::getDist($_->loc(),$lastpoint->loc(),0) * 0.275);
+			$dist = vary($dist,$dist / 2);
+			my $end = Points::getPointAtDist($lastpoint->loc(),vary($dist,$dist / 2),vary($lastaz + 110,15),1);
+			my ($v,$w,$x,$y) = ($end->loc(),$lastpoint->loc());
+			my $line = Segment->new($$numroutes,sprintf("Belt %da",$$numroutes++),$x,$v,$y,$w);
+			push(@lines,$line);
+			$end = Points::getPointAtDist($_->loc(),$dist,vary($thisaz - 110,15),1);
+			($v,$w,$x,$y) = ($_->loc(),$end->loc());
+			$line = Segment->new($$numroutes,sprintf("Belt %db",$$numroutes++ - 1),$x,$v,$y,$w);
+			push(@lines,$line);
+		}
+		$lastpoint = $_; $lastaz = $thisaz; # roll prevoiuses to currents
+	}
+	unless ($twist) { # already finished
+		print "-:-";
+		push(@belt,@lines);
+	} else { # twist each line
+		print "-+-";
+		foreach (@lines) {
+			my @temparray = Points::twist($_,$ratio);
+			push(@belt,@temparray,$_);
+		}
+	}
+	return @belt;
 }
 
 1;

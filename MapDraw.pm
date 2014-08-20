@@ -45,14 +45,14 @@ sub formSVG {
 	my $out = "";
 	foreach my $br (@{ $boxr }) {
 		my %box = %$br;
-		$out = sprintf("$out    <rect x=\"%d\" y=\"%d\" height=\"%d\" width=\"%d\" fill=\"%s\" />\n",$box{'x'} + $offsetx,$box{'y'} + $offsety,$box{'h'},$box{'w'},$box{'f'});
+		$out = sprintf("$out	<rect x=\"%d\" y=\"%d\" height=\"%d\" width=\"%d\" fill=\"%s\" />\n",$box{'x'} + $offsetx,$box{'y'} + $offsety,$box{'h'},$box{'w'},$box{'f'});
 	}
     my $curcol = incColor(); # later, do this only when switching road types, or not at all.
     foreach my $i (0 .. $#lines) {
         my $line = $lines[$i];
 		$curcol = $line->getMeta("color");
 		unless (defined $curcol) { $curcol = ($line->can_move() ? "#600" : "#36F"); }
-        $out = sprintf("$out    <line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"$curcol\" />\n",$line->ox() + $offsetx,$line->oy() + $offsety,$line->ex() + $offsetx,$line->ey() + $offsety);
+        $out = sprintf("$out	<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"$curcol\" />\n",$line->ox() + $offsetx,$line->oy() + $offsety,$line->ex() + $offsetx,$line->ey() + $offsety);
     }
 	if ($showseed) {
 		my $boxw = 160;

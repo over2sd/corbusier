@@ -84,7 +84,7 @@ sub main {
 		my $svg = '';
 		Points::setCornerHeadings($w,$h); # set boundaries for use multiple times.
 		MapDes::setMDConf("width",$w,"height",$h);
-		MapDes::setMDConf("centerx",\(int((0.5 + $w)/2),"centery",int((0.5 + $h)/2)));
+		MapDes::setMDConf("centerx",int((0.5 + $w)/2),"centery",int((0.5 + $h)/2));
 		if ($listfn ne '') {
 			@seedlist = Common::loadSeedsFrom($listfn);
 		}
