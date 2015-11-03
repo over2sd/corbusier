@@ -44,6 +44,8 @@ sub main {
     my $seed = -1; # Random seed/map number
     my $w = 800; # Width of image
     my $h = 600; # Height of image
+    my $hex = 0; # generate a map for use with a hex grid
+    my $grid = 32; # how big is the grid (diagonals/rows)
     my $fn = 'output.svg'; # Filename of map
 	my $disp = 0; # display seed on map (debug function)
 	my @seedlist; # list of seeds, read from file
@@ -59,8 +61,10 @@ sub main {
         'depth|d=i' => \$depth,
         'highways|exits|e=i' => \$hiw,
         'file|f=s' => \$fn,
+	'cells|l=i' => \$grid,
 		'listseed|l' => \$disp,
         'map|m=i' => \$seed,
+	'hexagonal|n' => \$hex,
         'poimode|p' => \$poi,
 		'squareint|q' => \$crossroadssquare,
         'ratio|r=i' => \$rat,

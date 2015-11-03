@@ -16,9 +16,19 @@ my %mdconfig = (
 	centerx => 400,
 	centery => 300
 );
+my $termcolors = 0;
+my $basecolor = "";
+my $funcolor = "";
+
+sub enableTermcolors {
+	my ($colname) = (shift or "ltblue");
+	$termcolors = 1;
+	$basecolor = Common::getColorsbyName("base");
+	$funcolor = Common::getColorsbyName($colname);
+}
 
 sub genmap {
-	if ($debug) { print "genmap(@_)\n"; }
+    if ($debug > 0) { print $funcolor . "genmap(" . ($debug > 7 ? "$basecolor@_$funcolor" : "") . ")$basecolor\n"; }
 	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
@@ -874,6 +884,15 @@ sub tieredBelts {
 		}
 	}
 	return @belt;
+}
+
+sub placePOI {
+    if ($debug > 0) { print $funcolor . "placePOI(" . ($debug > 7 ? "$basecolor@_$funcolor" : "") . ")$basecolor\n"; }
+	my ($mainsections,$secondaries,$sideratio,$poi,$maxroads) = @_;
+	my $width = $mdconfig{width};
+	my $height = $mdconfig{height};
+	my ($unit) = (min($width,$height)/12);
+
 }
 
 1;

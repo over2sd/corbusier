@@ -5,6 +5,7 @@ package Vertex;
 
 sub new {
 	my ($class,$i,$n,$x1,$y1,$z1,%meta) = @_;
+#print "Creating a vertex ($i,$n) at ($x1,$y1)...\n";
 	my $self = {
         identity => ($i or 0),
         moniker => ($n or 'Unnamed'),
@@ -503,6 +504,7 @@ sub new {
 	my $self = Node->SUPER::new($i,$n,$x,$y,$z);
 	my $nodeself = {
 		parentID => ($p or -1),
+		cost2parent => 0,
 		children => [],
 		class => "node",
 		maximum => 0
@@ -523,14 +525,60 @@ sub describe {
 ################################# Mesh Library #################################
 package Mesh; # a collection of nodes
 
+sub new {
+	my ($class,$i,$n,%meta) = @_;
+	my $self = {
+		identity => ($i or -1),
+		members => [],
+		metadata => (%meta or {}),
+		moniker => ($n or "Unnamed"),
+		lastID => 0
+	};
+	bless $self, 'Mesh';
+	return $self;
+}
+
+sub setget {
+	my ($self,$op,$val) = @_;
+#		identity => ($i or -1),
+#		metadata => (%meta or {}),
+	if ($op == 0) {
+		$self->{identity} = $val if defined($val);
+		return $self->{identity};
+	} elsif ($op == 1) {	
+		$self->{moniker} = $val if defined($val);
+		return $self->{moniker};
+	} else { # assume op is a key for the metadata hash -- give the user credit for using me properly.
+		unless (defined $val) { return $self->{metadata}{$op}; } # use op as key
+#	print "Setting metadata $key to $value.\n";
+		($self->{metadata}{$op} = $val) or return 1;
+		return 0;
+	}
+}
 
 sub addNode {
+	my ($self,$n,$x,$y,$z,$p) = @_;
+	# sanity check parent ID here?
+	my $member = Node->new(++$self->lastid,($n or "Anonymous"),$x,$y,$z,$p);
+	push(@{ $self->{members}},$member);
 }
 
 sub removeNode {
+	# find node in list of members
+	# find each child node in list of members
+		# set child's parent to grandparent
+	# if node is last in line, decrement {lastID}
+	# delete node
 }
 
 sub connectNodes {
+	my ($self,$parentID,$childID) = @_;
+	my $par = $self->getMember($parentID);
+	my $chi = $self->getMember($childID);
+	# If child has a parent, find its old parent in member list
+		# remove child from old parent
+	# set child's parent to parent
+	# add child to parent;s children
 }
 
 sub findPath {
