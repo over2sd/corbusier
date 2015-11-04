@@ -63,15 +63,25 @@ sub formSVG {
 
 sub formGrid {
     print "Adding grid...";
-    my ($out,$grid,%exargs) = @_;
+    my ($out,$scr,$grid,%exargs) = @_;
     my %gridobs = %{ $grid->{grid} };
     my $coords = ($exargs{showcoord} or 0);
     my $offsetx = ($exargs{offsetx} or 0);
     my $offsety = ($exargs{offsety} or 0);
+    my $mult = $grid->{width};
+    my $center = ($exargs{center} or [$scr->sx * $mult,$scr->sy * $mult]);
+print "Center: " . join(',',@$center) . " Offset: $offsetx,$offsety =>";
+    $out = sprintf("$out	<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#000\" />\n",$$center[0] + $offsetx,0 + $offsety,$$center[0] + $offsetx,$$center[1] * 2 + $offsety);
+    $out = sprintf("$out	<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#000\" />\n",0 + $offsetx,$$center[1] + $offsety,$$center[0] * 2 + $offsetx,$$center[1] + $offsety);
+    my ($xmod,$ymod) = (20 * $mult,10 * $mult + 5);
+    $offsetx += $$center[0];
+    $offsety += $$center[1];
+    $offsetx -= 230;
+    $offsety -= 135;
+print "$offsetx,$offsety\n";
     foreach (keys %gridobs) {
 	my $ob = $gridobs{$_};
 #print "\n'$_' forming object " . $ob->Iama . " at " . $ob->loc . "...";
-	my $scr = Hexagon::Screen->new('left',15,15,30,20);
 	my @pointlist = $scr->hex_to_poly($ob);
 	my $points = "";
 	my ($r,$g,$b) = (255,255,255);
@@ -84,10 +94,12 @@ sub formGrid {
 	    my $v = $pointlist[$_];
 	    $points = sprintf("%s%.3f,%.3f ",$points,$v->x + $offsetx,$v->y + $offsety);
 	}
-	my ($x,$y) = ($pointlist[2]->x + $offsetx + 7,$pointlist[2]->y + $offsety);
+	# text location, near point 3 of the hex:
+	my ($x,$y) = ($pointlist[2]->x + $offsetx + 3,$pointlist[2]->y + $offsety - 4);
 	my $text = $ob->{text};
-	$out = sprintf("$out	<polygon points=\"%s\" style=\"fill:%s;stroke:#000;\" />\n",$points,$fill);
-	($text ne "") && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$x,$y - 7,$text));
+	$out = sprintf("$out	<polygon points=\"%s\" style=\"fill:none;stroke:%s;\" />\n",$points,$fill);
+	($coords) && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$x,$y,$ob->loc));
+	($text ne "") && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$x,$y,$text));
     }
     return $out;
 }

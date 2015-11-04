@@ -82,10 +82,10 @@ sub add { # takes a coordionate trio or another Hex object
 	defined $s or $s = 0;
 	(ref($q) =~ /Fractional/) && return undef; # avoid arithmetic with fractional hexes
 	if (ref($q) =~ /Hex/) {
-		return ($self->q + $q->q,$self->r + $q->r, $self->s + $q->s);
+		return Hexagon::Hex->new($self->q + $q->q,$self->r + $q->r, $self->s + $q->s);
 	} else {
 		($q | $r | $s) || return undef; # return undef if no values given
-		return ($self->q + $q,$self->r + $r, $self->s + $s);
+		return Hexagon::Hex->new($self->q + $q,$self->r + $r, $self->s + $s);
 	}
 }
 
@@ -96,27 +96,27 @@ sub subtract { # takes a coordionate trio or another Hex object
 	defined $s or $s = 0;
 	(ref($q) =~ /Fractional/) && return undef; # avoid arithmetic with fractional hexes
 	if (ref($q) =~ /Hex/) {
-		return ($self->q - $q->q,$self->r - $q->r, $self->s - $q->s);
+		return Hexagon::Hex->new($self->q - $q->q,$self->r - $q->r, $self->s - $q->s);
 	} else {
 		($q | $r | $s) || return undef; # return undef if no values given
-		return ($self->q - $q,$self->r - $r, $self->s - $s);
+		return Hexagon::Hex->new($self->q - $q,$self->r - $r, $self->s - $s);
 	}
 }
 
 sub multiply { # takes a multiple
 	my ($self,$m) = @_;
 	defined $m or $m = 0;
-	return ($self->q * $m,$self->r * $m, $self->s * $m);
+	return Hexagon::Hex->new($self->q * $m,$self->r * $m, $self->s * $m);
 }
 
-sub length { # from what?
+sub hex_length { # converts a difference Hex to a distance in Hexes
 	my $self = shift;
 	return int((abs($self->q) + abs($self->r) + abs($self->s))/2);
 }
 
 sub distance { # inherits subtract's flexibility
 	my ($self,$other,$r,$s) = @_;
-	return abs($self->subtract($other,$r,$s));
+	return hex_length($self->subtract($other,$r,$s));
 }
 
 my %dirs = ( nw => 0, ne => 5, e => 4, se => 3, sw => 2, w => 1 );
@@ -153,13 +153,16 @@ sub hex_lerp { # linear interpolation
 
 sub hex_linedraw {
 	my ($self,$h) = @_;
-print "\n>" . $self->loc . "--" . $h->loc . "<\n";
 	my $n = $self->distance($h);
+#print "\n>" . $self->loc . "--" . $h->loc . "< ($n Hexes)\n";
 	my @results;
-	my $step = 1.0 / max($n,1);
+	my $step = 1.0 / ($n ? $n : 1);
 	foreach (0 .. $n) {
 #		push(@results,$self->neighbor_toward($h));
-		push(@results,Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_)));
+#		push(@results,Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_)));
+		my $h = Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_));
+#print "=> " . $h->loc . "\n";
+		push(@results,$h);
 	}
 	return @results;
 }
@@ -168,8 +171,7 @@ sub neighbor_toward { # returns the neighboring hex in the direction of the give
 	my ($self,$h) = @_;
 	my $n = $self->distance($h);
 	my $step = 1.0 / ($n ? $n : 1);
-print "  D: $n s: $step  ";
-	return Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step));
+	return Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step),2);
 }
 
 sub Iama {
@@ -218,24 +220,27 @@ sub map_gen {
 	for ($self->{shape}) {
 		if (/0/) {
 			die "Not implemented.";
-		} elsif (/4/) { # hexb
+		} elsif (/4/) { # hexb # RPG-style hexes (larger hex matches orientation of smaller hexes, unlike hexa, which makes larger hex orientation 90 degrees from its component hexes)
 			my $max = $self->{width}; # our base size.
 			$max += ($max % 2); # we need to be even for this method to work.
+			($self->{width} == $max) || ($self->{width} = $max); # update if changed
 			my ($u,$v,$w) = (int($max /4),$max / 2,3 * int($max /4)); # quartile bounds
-			my $mark = Hexagon::placeHex($self->{order},0,$w-2,name => "#c99", text => sprintf("%d,%d",0,$w-2));
-			${$self->{grid}}{$mark->loc()} = $mark;
-			$mark = Hexagon::placeHex($self->{order},$w+2,0,name => "#c99", text => sprintf("%d,%d",$w+2,0));
-			${$self->{grid}}{$mark->loc()} = $mark;
-			$mark = Hexagon::placeHex($self->{order},$w-2,$w +2,name => "#c99", text => sprintf("%d,%d",$w-2,$w+2));
-			${$self->{grid}}{$mark->loc()} = $mark;
-
-
+			# Markers for aid in finding locations visually:
+			my @starters = (0,$w-2,$w+2,0,$w-2,$w+2,$u-1,$max,$max,$u+1,$u+1,$u-1);
+print "Start: " . join(',',@starters);
+			my @ring;
+			foreach (0 .. $#starters) {
+				($_ % 2) && next; # skip every other index
+				my $mark = Hexagon::placeHex($self->{order},$starters[$_],$starters[$_ + 1],name => "#c99", text => sprintf("%d,%d",$starters[$_],$starters[$_ + 1]));
+				${$self->{grid}}{$mark->loc()} = $mark;
+			}
+			# The actual grid builder:
 			my ($a,$z) = ($w + 1,$w - 1);
 			foreach my $x (0 .. $max) {
 				$a -= ($x < $u ? 2 : ($x == $u ? 1 : $x <= $w + 1 ? ($u - $x + 1) % 2 : -1));
 				$z -= ($x <= $u ? -1 : ($x == $u + 1 ? 0 : ($x <= $w ? ($x - $u + 1) % 2 : 2)));
 				foreach my $y ($a .. $z) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#eef");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -244,25 +249,6 @@ sub map_gen {
 
 			my $center = Hexagon::placeHex($self->{order},$v,$v,name => "#FCC");
 			${$self->{grid}}{$center->loc()} = $center;
-			my @starters = ($w,0,$u,$u,0,$w,$u,$max,$w,$w,$max,$u);
-print "Start: " . join(',',@starters);
-			my @ring;
-			foreach (0 .. $#starters) {
-				($_ % 2) && next; # skip every other index
-				push(@ring,Hexagon::placeHex($self->{order},$starters[$_],$starters[$_ + 1]));
-			}
-			foreach my $round (0 .. 2) {
-
-				foreach (0 .. $#ring) {
-					$ring[$_]->rename(sprintf("#80%x%x",$_ * 51,($round % 5) * 51));
-					${$self->{grid}}{$ring[$_]->loc()} = $ring[$_];
-# draw line of hexes between ring[$_] and ring[$_ + 1]
-					my @line = $ring[$_]->hex_linedraw($ring[($_ + 1) % scalar @ring]);
-# add hexes to grid
-					foreach (@line) {
-						${$self->{grid}}{$_->loc()} = $_;
-					}
-				}
 # find next ring's members
 				foreach (0 .. $#ring) {
 print "Neighbor of " . $ring[$_]->loc;
@@ -290,24 +276,7 @@ printf("Check $x,$y: $rowmin < %d < $rowmax\n",$x+$y);
 			foreach my $x (0 .. $self->{height} - 1) {
 				my $xoff = floor($x/2);
 				foreach my $y (-$xoff .. $self->{width} - $xoff - 1) {
-					my $h;
-					for ($self->{order}) { # order is 0: (q,r), 1: (s,q), 2: (r,s), 3: (r,q), 4: (q,s), 5: (s,r)
-						if (/0/) {
-							$h = Hexagon::Hex->new($x,$y,-$x-$y);
-						} elsif (/1/) {
-							$h = Hexagon::Hex->new($y,-$x-$y,$x);
-						} elsif (/2/) {
-							$h = Hexagon::Hex->new(-$x-$y,$x,$y);
-						} elsif (/3/) {
-							$h = Hexagon::Hex->new($y,$x,-$x-$y);
-						} elsif (/4/) {
-							$h = Hexagon::Hex->new($x,-$x-$y,$y);
-						} elsif (/5/) {
-							$h = Hexagon::Hex->new(-$x-$y,$y,$x);
-						} else {
-							die "Invalid order for map_gen ($self->{order})\n";
-						}
-					}
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -418,7 +387,7 @@ sub hex_to_lines {
 	my @segments;
 	foreach (0 .. $#corners) {
 		my $point = $corners[$_];
-print "Corner $_: " . $point->describe() . "\n";
+#print "Corner $_: " . $point->describe() . "\n";
 		my ($ox,$oy,$ex,$ey) = ($corners[$_]->loc(),$corners[($_ + 1) % scalar @corners]->loc());
 		my $line = Segment->new(0,"poly$_",$ox,$ex,$oy,$ey);
 		push(@segments,$line);
@@ -457,10 +426,10 @@ sub new {
 }
 
 sub hex_round {
-	my ($self) = @_;
-	my $q = floor($self->q); # TODO: Does this need to become -0.5 if number is negative?
-	my $r = floor($self->r);
-	my $s = floor($self->s);
+	my ($self,$unused) = @_;
+	my $q = int($self->q);
+	my $r = int($self->r);
+	my $s = int($self->s);
 	my $dq = abs($q - $self->q);
 	my $dr = abs($r - $self->r);
 	my $ds = abs($s - $self->s);
