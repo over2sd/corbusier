@@ -29,11 +29,12 @@ sub enableTermcolors {
 
 sub genmap {
     if ($debug > 0) { print $funcolor . "genmap(" . ($debug > 7 ? "$basecolor@_$funcolor" : "") . ")$basecolor\n"; }
-	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections) =  @_;
+	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections,$usehex,$hexscale) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
 	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$centertype,$squareintersections);
+
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -483,7 +484,7 @@ sub connectSqs {
 		}
 	} # end of squares connections
 	print ", waypoints..";
-	
+
 	for ($centertype) {
 		if (/2/) {
 			my @srindex;
@@ -581,7 +582,7 @@ sub linkNearest {
 				print "Moving endpoint from (" . $line->ex() . "," . $line->ey() . ") to (" . $sortedlist[$i]->x() . "," . $sortedlist[$i]->y() . ").\n" if ($debug > 3);
 				$line->move_endpoint($x,$y);
 				$lowdist = $line->length();
-			} else { 
+			} else {
 				print "Perpdist: $dist (line not moved)\n" if ($debug > 3);
 			}
 		} else {
@@ -788,7 +789,7 @@ sub bendAtBoundBox {
 		push(@box,$left,$right,$top,$bottom);
 	}
 	foreach (@$list) { # for each item in given list
-		foreach my $b (@box) { # check against each 
+		foreach my $b (@box) { # check against each
 			if ($_->getMeta("bent")) { next; }
 			my ($touches,$tx,$ty) = $_->touches($b);
 			if ($whole) { $tx = nround(0,$tx); $ty = nround(0,$ty); }

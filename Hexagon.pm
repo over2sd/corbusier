@@ -123,10 +123,6 @@ my %dirs = ( nw => 0, ne => 5, e => 4, se => 3, sw => 2, w => 1 );
 my @dirhex =
 	(Hexagon::Hex->new(1, 0, -1), Hexagon::Hex->new(1, -1, 0), Hexagon::Hex->new(0, -1, 1),
      Hexagon::Hex->new(-1, 0, 1), Hexagon::Hex->new(-1, 1, 0), Hexagon::Hex->new(0, 1, -1));
-# differential WAS y=-x, z=z
-#my @dirhex = # coords (y,z) go left diagonally from top, down from top
-#	(Hexagon::Hex->new(2, -1, -1), Hexagon::Hex->new(1, -1, 0), Hexagon::Hex->new(-1, 0, 1),
-#     Hexagon::Hex->new(-2, 1, 1), Hexagon::Hex->new(-1, 1, 0), Hexagon::Hex->new(1, 0, -1));
 
 sub hex_direction {
 	my $dir = shift;
@@ -178,7 +174,7 @@ sub Iama {
 	my $self = shift;
 	return ref($self);
 }
-    
+
 sub rename {
 	my ($self,$name) = @_;
 	$self->{name} = $name;
@@ -202,7 +198,7 @@ sub new {
 	my $shapenum = findIn($shape,@shapes);
 	($shapenum >= 0) || die "Invalid shape '$shape' given. Valid shapes are: " . join(',',@shapes) . ".\n";
 	(defined $order) or ($order = 0); # order is 0: (q,r), 1: (s,q), 2: (r,s), 3: (r,q), 4: (q,s), 5: (s,r)
-	($shapenum == 5) || ($order = $order % 3); # order can't be more that 2 unless shape is rect/tri.
+	($shapenum == 5) || ($order = $order % 3); # order can't be more that 2 unless shape is rect.
 	my $self = {
 		shape => $shapenum,
 		width => $width,
@@ -216,10 +212,36 @@ sub new {
 
 sub map_gen {
 	my ($self) = shift;
-	my ($x,$y);
 	for ($self->{shape}) {
-		if (/0/) {
-			die "Not implemented.";
+		if (/0/) { # para # parallelogram/rhombus
+			foreach my $x (1 .. $self->{width}) {
+				foreach my $y (1 .. $self->{height}) {
+					my $h = Hexagon::placeHex($self->{order},$x - 1,$y - 1,name => "#99f");
+					${$self->{grid}}{$h->loc()} = $h;
+				}
+			}
+		} elsif (/1/) { # trii # increasing triangle
+			foreach my $x (0 .. $self->{width}) {
+				foreach my $y (0 .. $self->{width} - ($x + 1)) {
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					${$self->{grid}}{$h->loc()} = $h;
+				}
+			}
+		} elsif (/2/) { # trid # decreasing triangle
+			foreach my $x (0 .. $self->{width}) {
+				foreach my $y ($self->{width} - $x .. $self->{width}) {
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					${$self->{grid}}{$h->loc()} = $h;
+				}
+			}
+		} elsif (/3/) { # hexa # radius-walk hexes (larger map hex is 90 degrees rotated from shape of component hexes)
+			foreach my $x (-$self->{width} .. $self->{width}) {
+				my ($a,$z) = (max(-$self->{width},-$x-$self->{width}),min($self->{width},-$x+$self->{width}));
+				foreach my $y ($a .. $z) {
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					${$self->{grid}}{$h->loc()} = $h;
+				}
+			}
 		} elsif (/4/) { # hexb # RPG-style hexes (larger hex matches orientation of smaller hexes, unlike hexa, which makes larger hex orientation 90 degrees from its component hexes)
 			my $max = $self->{width}; # our base size.
 			$max += ($max % 2); # we need to be even for this method to work.
@@ -227,7 +249,6 @@ sub map_gen {
 			my ($u,$v,$w) = (int($max /4),$max / 2,3 * int($max /4)); # quartile bounds
 			# Markers for aid in finding locations visually:
 			my @starters = (0,$w-2,$w+2,0,$w-2,$w+2,$u-1,$max,$max,$u+1,$u+1,$u-1);
-print "Start: " . join(',',@starters);
 			my @ring;
 			foreach (0 .. $#starters) {
 				($_ % 2) && next; # skip every other index
@@ -244,34 +265,8 @@ print "Start: " . join(',',@starters);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
-
-=item comment
-
-			my $center = Hexagon::placeHex($self->{order},$v,$v,name => "#FCC");
-			${$self->{grid}}{$center->loc()} = $center;
-# find next ring's members
-				foreach (0 .. $#ring) {
-print "Neighbor of " . $ring[$_]->loc;
-					$ring[$_] = $ring[$_]->neighbor_toward($center);
-print " is " . $ring[$_]->loc . ".\n";
-				}
-
-			}
-
-			foreach my $x (0 .. $self->{width}) {
-				foreach my $y (0 .. $self->{width}) {
-					my $h;
-					my $rowmin = ($y > $self->{width} * .66 ? $self->{width} + int($self->{width} / 4 - 0.5) - ($self->{width} - $y) * 2 + 1 : $self->{width} - int($self->{width} / 4 + 0.5) - $y);
-					my $rowmax = ($y > $self->{width} / 3 ? $self->{width} + int($self->{width} / 4 + 0.5) + ($self->{width} - max($y,$x)) + 1 : $self->{width} - int($self->{width} / 4 - 0.5) + $y * 2);
-printf("Check $x,$y: $rowmin < %d < $rowmax\n",$x+$y);
-					($x + $y < max($rowmin,$self->{width} / 2)) && next;
-					($x + $y > min($rowmax,$self->{width} * 1.5)) && next;
-					${$self->{grid}}{$h->loc()} = $h;
-				}
-			}
-
-=cut
-
+			my $center = Hexagon::placeHex($self->{order},$v,$v,name => "#369");
+			${$self->{grid}}{center} = $center;
 		} elsif (/5/) { # rect
 			foreach my $x (0 .. $self->{height} - 1) {
 				my $xoff = floor($x/2);
@@ -280,10 +275,50 @@ printf("Check $x,$y: $rowmin < %d < $rowmax\n",$x+$y);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
+		} else {
+			die "Shape $_ not implemented.";
 		}
 	}
 }
 
+sub req_offset {
+	my ($self,$scale) = @_;
+	my $order = $self->{order};
+	my ($xoff,$yoff) = (0,0);
+	# get proper offset here
+	for ($self->{shape}) {
+		if (/0/) { # para # parallelogram/rhombus
+			($xoff,$yoff) = (-0.55 * $self->{width} * $scale,-0.33 * $self->{height} * $scale);
+		} elsif (/1/) { # trii # increasing triangle
+			($xoff,$yoff) = (-0.38 * $self->{width} * $scale,-0.19 * $self->{width} * $scale);
+		} elsif (/2/) { # trid # decreasing triangle
+			($xoff,$yoff) = (-0.868 * $self->{width} * $scale,-0.39 * $self->{width} * $scale);
+		} elsif (/3/) { # hexa # radius-walk hexes (larger map hex is 90 degrees rotated from shape of component hexes)
+			# hexa starts from center, so it's always centered.
+		} elsif (/4/) { # hexb # RPG-style hexes (larger hex matches orientation of smaller hexes, unlike hexa, which makes larger hex orientation 90 degrees from its component hexes)
+			($xoff,$yoff) = (-0.6500744 * $self->{width} * $scale,-(0.375 * $self->{width} * $scale) + ($self->{width} % 4 > 0 && $self->{width} % 4 < 3 ? 23 : 0));
+		} elsif (/5/) { # rect
+			($xoff,$yoff) = (-0.475 * $self->{width} * $scale,-0.19 * $self->{height} * $scale);
+		}
+	}
+
+	for ($order) {
+		if (/1/) {
+			($xoff,$yoff) = (0,-2 * $yoff);
+		} elsif (/2/) {
+			($xoff,$yoff) = (-$xoff,$yoff);
+		}
+	}
+	return $xoff,$yoff;
+}
+
+sub width {
+	return $_[0]->{width};
+}
+
+sub height {
+	return $_[0]->{height};
+}
 
 package Hexagon::Orientation;
 
@@ -324,8 +359,8 @@ use Math::Trig qw( tan pi acos asin );
 
 sub new {
 	my ($class,$orientation,$sx,$sy,$ox,$oy) = @_;
-	my $sz = Vertex->new(undef,undef,$sx,$sy);
-	my $loc = Vertex->new(undef,undef,$ox,$oy);
+	my $sz = Vertex->new(undef,"scrscl",$sx,$sy);
+	my $loc = Vertex->new(undef,"scrorig",$ox,$oy);
 	my $o = Hexagon::Orientation->new($orientation);
 	my $self = {
 		orientation => $o,
@@ -376,7 +411,7 @@ sub polygon_corners {
 	my $c = $self->hex_to_pixel($h);
 	foreach (0..5) {
 		my $o = $self->corner_offset($_);
-		push(@corners,Vertex->new($_,$h->q . "," . $h->r,$c->x + $o->x, $c->y + $o->y));
+		push(@corners,Vertex->new($_,$h->q . "," . $h->r,$c->x + $o->x + $self->ox, $c->y + $o->y + $self->oy));
 	}
 	return @corners;
 }

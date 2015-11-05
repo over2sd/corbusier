@@ -58,7 +58,7 @@ sub formSVG {
 		my $boxw = 160;
 		$out = sprintf("$out	<rect x=\"%d\" y=\"%d\" width=\"$boxw\" height=\"40\" fill=\"#6ff\" />\n	<text x=\"%d\" y=\"%d\" font-size=\"3.2em\" fill=\"#00c\">#$seed</text>\n",$offsetx + $w - $boxw,$offsety,$offsetx + $w - $boxw + 5,$offsety + 35);
 	}
-    return $out; 
+    return $out;
 }
 
 sub formGrid {
@@ -76,8 +76,8 @@ print "Center: " . join(',',@$center) . " Offset: $offsetx,$offsety =>";
     my ($xmod,$ymod) = (20 * $mult,10 * $mult + 5);
     $offsetx += $$center[0];
     $offsety += $$center[1];
-    $offsetx -= 230;
-    $offsety -= 135;
+#    $offsetx -= 622;
+#    $offsety -= 360;
 print "$offsetx,$offsety\n";
     foreach (keys %gridobs) {
 	my $ob = $gridobs{$_};

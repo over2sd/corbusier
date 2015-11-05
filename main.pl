@@ -11,11 +11,11 @@ use Getopt::Long;
 my %bgfill = ( 'r' => 255, 'g' => 255, 'b' => 255 );
 
 sub mapSeed {
-		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$centertype,$showtheseed,$offsetx,$offsety,$forcecrossroads) = @_;
+		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$centertype,$showtheseed,$offsetx,$offsety,$forcecrossroads,$hexes,$hexsz) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
-        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads);
-#        my @poi = 
+        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads,$hexes,$hexsz);
+#        my @poi =
 #		print "- $nr routes\n";
 #		foreach my $i (0 .. $#routes) {
 #            print $routes[$i]->describe(1) . "\n";
@@ -98,7 +98,7 @@ sub main {
 			my ($x,$y) = (0,0);
 			my $width = Common::selectWidth($w,scalar(@seedlist));
 			foreach my $seed (@seedlist) {
-				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,$x,$y,$crossroadssquare);
+				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,$x,$y,$crossroadssquare,$hex,$grid);
 				push(@svglist,$svgstring);
 				$x += $w;
 				if ($x >= $width) {
@@ -111,7 +111,7 @@ sub main {
 				$svg = "$svg$add\n";
 			}
 		} else {
-			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,0,0,$crossroadssquare);
+			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,0,0,$crossroadssquare,$hex,$grid);
 		}
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
