@@ -6,7 +6,7 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest vary );
+our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest vary lineNo);
 
 use List::Util qw( min max );
 use POSIX qw( floor );
@@ -225,6 +225,24 @@ sub listMerge {
 		}
 	}
 	return \@oa,\@oi;
+}
+
+sub lineNo {
+	my $depth = shift;
+	$depth = 1 unless defined $depth;
+	use Carp qw( croak );
+	my @loc = caller($depth);
+	my $line = $loc[2];
+	my $file = $loc[1];
+	@loc = caller($depth + 1);
+	my $sub = $loc[3];
+	if ($sub ne '') {
+		@loc = split("::",$sub);
+		$sub = $loc[$#loc];
+	} else {
+		$sub = "(MAIN)";
+	}
+	return qq{ at line $line of $sub in $file.\n };
 }
 
 1;

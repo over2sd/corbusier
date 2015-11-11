@@ -29,7 +29,7 @@ sub enableTermcolors {
 
 sub genmap {
     if ($debug > 0) { print $funcolor . "genmap(" . ($debug > 7 ? "$basecolor@_$funcolor" : "") . ")$basecolor\n"; }
-	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections,$usehex,$hexscale) =  @_;
+	my ($hiw,$sec,$rat,$poi,$max,$centertype,$squareintersections) =  @_;
 	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
 	# later, put decision here about type(s) of map generation to use.
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
@@ -338,14 +338,14 @@ sub genSquares {
 	unless ($qty) { return (); }
 	my $width = $mdconfig{width};
 	my $height = $mdconfig{height};
-	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),int($width/2+0.5),int(0.5+$height/2),int(rand(180)));
+	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),getCenter(),int(rand(180)));
+print "\nmy (unit,azunit,cx,cy,centaz) = ($unit,$azunit,$cx,$cy,$centaz);\n";
 	$$unitref = $unit; # store unit for caller
 	# Possible switch: offset all positions by +/- 1 * $unit?
 	my ($centqty,@squares);
 	if ($centertype == 1 or $centertype == 2) { $centqty = 0;
 	} elsif ($centertype == 3) { $centqty = ($qty % 2 ? 2 : 3);
-	} else {
-		$centqty = 1;
+	} else { $centqty = 1;
 	}
 	foreach my $i (0 .. $centqty) {
 		unless ($centqty) { last; }
@@ -894,6 +894,137 @@ sub placePOI {
 	my $height = $mdconfig{height};
 	my ($unit) = (min($width,$height)/12);
 
+}
+
+sub genHexMap {
+	my ($hiw,$sec,$rat,$poi,$maxr,$centyp,$force,$g,$screen) = @_;
+	my ($nr,@routes) = (0,());
+	if ($hiw < 1) { print "0 exits\n"; return 0,undef; } # Have to have at least one highway leaving town.
+	my $mxj = ($hiw > 20 ? 11 : ($hiw > 10 ? 7 : 5));
+	my $joins = ($force ? $force : floor(rand($mxj)) + 1); # choose number of intersections
+	if ($debug) { print "  Joins: " . $joins . "/" . $mxj . "\n"; }
+	my $needed = 0; # how many crossroads do we have to have?
+	my @waypoints; # storage for added waypoints
+	my $unit = 0; # genSquares will edit this
+	my $divisor = $joins;
+	($divisor < 2) && $divisor++; # fewer than three junctions
+	# If more than one highway per join, grow highways with weight toward even spacing around the map:
+	print "Dividing $hiw among $divisor($joins) junctions...";
+	# ensure enough junctions for highways to not look like a panicked exodus
+	($divisor < ($hiw / 3)) && ($needed = $hiw / 3 - $divisor);
+	# choose squares
+	my @squares = genSquares($joins,$centyp,0.75,\@waypoints,$needed,\$unit);
+	# TODO: add here function to store square/POI markers in an SVG holder.
+print "Received " . scalar @squares . " squares...";
+	foreach (@squares) {
+		$_->move($_->x + $screen->ox,$_->y + $screen->oy);
+		# KEEP previous line when removing helper hex drawing lines
+		my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$screen->pixel_to_hex($_)->hex_round,$screen->center);
+		my $text = sprintf("%d,%d",$screen->pixel_to_axial($_,1));
+print $text . "\n";
+		MapDraw::formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => 1, fill => $fill);
+	}
+	# connect all village squares
+	print "debug $nr ";
+	my @irts = connectSqs(\@squares,\@waypoints,$centyp,\$nr);
+	@irts = connectSqsHex($screen,@irts);
+	push(@routes,@irts);
+	# center squares in hexes
+	my @border = $g->genborder(); # get possible exits
+	# choose exits
+	my @exits = pickExitHexes($hiw,$screen,$g,@border);
+	# find nearest square
+	my @erts;
+	foreach (@exits) {
+		my $dest = getClosest($screen,$_,@squares);
+		my @steps = getRoute($screen,$_,$dest);
+		push(@erts,@steps);
+	}
+	push (@routes,@erts);
+	$nr += scalar @exits;
+#	foreach (@exits) {
+#		my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$_,int(0.5 + $mdconfig{width} /2),int(0.5 + $mdconfig{height} /2));
+#		my $text = $_->{text};
+#		MapDraw::formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => 1, fill => $fill, loc => $_->loc);
+#	}
+	# choose side roads
+	# look for places to add minor roads
+	# return or draw map
+	return $nr,@routes;
+}
+
+sub getRoute { # shorthand
+	my ($scr,$start,$end) = @_;
+	my ($cx,$cy) = getCenter();
+	return $scr->hexlist_to_lines(($cx or 0),($cy or 0),$start->hex_linedraw($end));
+}
+sub connectSqsHex {
+	my ($screen,@routes) = @_;
+	my @hexrts;
+	my ($cx,$cy) = getCenter();
+	foreach my $h (@routes) {
+printf("%d,%d - %d,%d\n",$h->ox,$h->oy,$h->ex,$h->ey);
+		my $sv = Vertex->new(undef,undef,$h->ox,$h->oy);
+		my $ev = Vertex->new(undef,undef,$h->ex,$h->ey);
+		my $sf = $screen->pixel_to_hex($sv);
+		my $ef = $screen->pixel_to_hex($ev);
+		my $sd = $sf->hex_round();
+		my $ed = $ef->hex_round();
+		push(@hexrts,getRoute($screen,$sd,$ed));
+	}
+	return @hexrts;
+}
+
+sub pickExitHexes {
+	my ($hiw,$screen,$map,@colist) = @_;
+	my $order = $map->{order};
+	my $center = $map->{grid}->{center};
+	print "I need to pick $hiw exits from " . scalar @colist . " options...\n";
+	my @exits;
+	my $listindex = $center->intpairs_to_azimuth($screen,$order,@colist);
+#	foreach my $i (0 .. $#colist) {
+#		printf("%d,%d: %.3f\n",@{$colist[$i]},$$listindex[$i]);
+#	}
+	my ($sortedcolist,$sortedindex) = Common::listSort($listindex,@colist);
+#	foreach my $i (0 .. $#$sortedcolist) {
+#		printf("%d,%d- %.3f\n",@{$$sortedcolist[$i]},$$sortedindex[$i]);
+#	}
+	my $max = scalar @colist; # how many exits do we have to choose from?
+	my $spread = ($hiw < $max/6); # do we not have too many exits to spread?
+	use List::Util qw( min max );
+	my $range = int($max/6)-3; # how far apart can they be?
+	my $interval = max($range+1,1);
+	$range = max($range,1);
+	my $start = floor(rand(1000));
+# print "RI: $spread H: $hiw M: $max R: $range I: $interval S: $start\n";
+	foreach my $i (1 .. $hiw) {
+		$start = $start % $max;
+		push(@exits,$start);
+# print "Placing exit at $start: " . join(',',@{$$sortedcolist[$start]}) . "\n";
+		$start += ($spread ? # worry about clustering?
+			floor(rand($range)) + 2 : # 2 makes adjacent exits very unlikely
+			$interval ); # too many exits; just increase minimum
+	}
+	foreach (0 .. $#exits) { # translate coords to hexes
+		$exits[$_] = Hexagon::placeHex($order,@{$$sortedcolist[$exits[$_]]},name => "#f00");
+	}
+	return @exits;
+}
+
+sub getClosest {
+	my ($scr,$h,@hlist) = @_;
+	my @dists;
+	foreach (@hlist) {
+		push(@dists,$h->distance($scr->pixel_to_hex($_)->hex_round()));
+	}
+	my $minind = -1; # index of minimum
+	my $mindis = 9999999; # minimum distance
+	foreach (0 .. $#hlist) { # magic: reset index and minimum, if less than current.
+		($mindis > $dists[$_]) && ($mindis = $dists[$_]) && ($minind = $_);
+	}
+	printf("Closest to %s is %d:%s (%d hexes)\n",$h->loc,$minind,$scr->pixel_to_hex($hlist[$minind])->hex_round()->loc,$mindis);
+	($minind < 0) && die "Wat! (shouldn't happen unless user passed empty array or something stupid like that)";
+	return $scr->pixel_to_hex($hlist[$minind])->hex_round();
 }
 
 1;

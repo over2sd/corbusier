@@ -7,25 +7,52 @@ package Hexagon;
 
 sub placeHex {
 	my ($order,$x,$y,%profile) = @_;
-	my $h;
+	return Hexagon::Hex->new(toCube($order,$x,$y),%profile);
+}
+
+sub toAxial {
+	my ($order,$q,$r,$s) = @_;
+#	(defined $s) || ($s = -$q-$r);
 	for ($order) { # order is 0: (q,r), 1: (s,q), 2: (r,s), 3: (r,q), 4: (q,s), 5: (s,r)
 		if (/0/) {
-			$h = Hexagon::Hex->new($x,$y,-$x-$y,%profile);
+			return $q,$r;
 		} elsif (/1/) {
-			$h = Hexagon::Hex->new($y,-$x-$y,$x,%profile);
+			return $s,$q;
 		} elsif (/2/) {
-			$h = Hexagon::Hex->new(-$x-$y,$x,$y,%profile);
+			return $r,$s;
 		} elsif (/3/) {
-			$h = Hexagon::Hex->new($y,$x,-$x-$y,%profile);
+			return $r,$q;
 		} elsif (/4/) {
-			$h = Hexagon::Hex->new($x,-$x-$y,$y,%profile);
+			return $q,$s;
 		} elsif (/5/) {
-			$h = Hexagon::Hex->new(-$x-$y,$y,$x,%profile);
+			return $s,$r;
 		} else {
-			die "Invalid order given to Hexagon::placeHex ($order)\n";
+			die "Invalid order given to Hexagon::toAxial ($order)\n";
 		}
 	}
-	return $h;
+}
+
+sub toCube {
+	my ($order,$x,$y) = @_;
+	my @c;
+	for ($order) { # order is 0: (q,r), 1: (s,q), 2: (r,s), 3: (r,q), 4: (q,s), 5: (s,r)
+		if (/0/) {
+			push(@c,$x,$y,-$x-$y);
+		} elsif (/1/) {
+			push(@c,$y,-$x-$y,$x);
+		} elsif (/2/) {
+			push(@c,-$x-$y,$x,$y);
+		} elsif (/3/) {
+			push(@c,$y,$x,-$x-$y);
+		} elsif (/4/) {
+			push(@c,$x,-$x-$y,$y);
+		} elsif (/5/) {
+			push(@c,-$x-$y,$y,$x);
+		} else {
+			die "Invalid order given to Hexagon::toCube ($order)\n";
+		}
+	}
+	return @c;
 }
 
 package Hexagon::Hex;
@@ -37,7 +64,10 @@ sub new {
 	(defined $q and defined $r) || die "Hexagon::Hex must be created with at least two coordinates!\n";
 	(defined $s) || ($s = -$r-$q);
 	# assert coords sum as 0:
-	($q + $r + $s == 0) || die "Hexagon::Hex was given incorrect coordinates: $q,$r,$s\n";
+	unless ($q + $r + $s == 0) {
+		my $position = Common::lineNo();
+		die "Hexagon::Hex was given incorrect coordinates $q,$r,$s$position\n";
+	}
 	my $self = { # we've already made sure each of these values is defined.
 		q => $q,
 		r => $r,
@@ -70,6 +100,10 @@ sub loc { # alias
 	return $_[0]->coords(@_);
 }
 
+sub intloc {
+	return $_[0]->q,$_[0]->r,$_[0]->s;
+}
+
 sub equals {
 	my ($self,$ego) = @_;
 	return ($self->q == $ego->q && $self->r == $ego->r && $self->s == $ego->s);
@@ -99,6 +133,10 @@ sub subtract { # takes a coordionate trio or another Hex object
 		return Hexagon::Hex->new($self->q - $q->q,$self->r - $q->r, $self->s - $q->s);
 	} else {
 		($q | $r | $s) || return undef; # return undef if no values given
+		unless ($q + $r + $s == 0) {
+			my $position = Common::lineNo();
+			die "Hexagon::Hex was given incorrect coordinates $q,$r,$s$position\n";
+		}
 		return Hexagon::Hex->new($self->q - $q,$self->r - $r, $self->s - $s);
 	}
 }
@@ -114,7 +152,7 @@ sub hex_length { # converts a difference Hex to a distance in Hexes
 	return int((abs($self->q) + abs($self->r) + abs($self->s))/2);
 }
 
-sub distance { # inherits subtract's flexibility
+sub distance { # in hex steps; inherits subtract's flexibility
 	my ($self,$other,$r,$s) = @_;
 	return hex_length($self->subtract($other,$r,$s));
 }
@@ -184,6 +222,24 @@ sub name {
 	return $_[0]->{name};
 }
 
+sub intpairs_to_azimuth {
+	my ($self,$screen,$order,@pairs) = @_;
+	my $here = $screen->hex_to_pixel($self);
+	my $verts;
+	foreach my $p (@pairs) {
+		my $v = $screen->hex_to_pixel(Hexagon::placeHex($order,@$p));
+		push(@{$verts},$v);
+	}
+	my @azims = Points::getAzimuths($here->x,$here->y,$verts);
+	return \@azims;
+}
+
+sub azimuth {
+	my ($self,$screen,$vertex,$order,$whole,$relative) = @_;
+	my $here = Vertex->new(undef,$self->name,$screen->hex_to_pixel($self));
+	return Points::getAzimuth($here->x,$here->y,$vertex->x,$vertex->y,$whole,$relative);
+}
+
 package Hexagon::Offset;
 
 package Hexagon::Map;
@@ -210,27 +266,52 @@ sub new {
 	return $self;
 }
 
-sub map_gen {
-	my ($self) = shift;
+sub genborder {
+	my ($self) = @_;
+	my @border;
+	for ($self->{shape}) {
+		if (/4/) {
+			my $max = $self->{width}; # our base size.
+			$max += ($max % 2) + 1; # we need to be even for this method to work.
+			($self->{width} == $max) || ($self->{width} = $max); # update if changed
+			my ($u,$v,$w) = (int($max /4),$max / 2,3 * int($max /4)); # quartile bounds
+			my ($a,$z) = ($w + 1,$w - 1);
+			foreach my $x (-1 .. $max) {
+				$a -= ($x < $u ? 2 : ($x == $u ? 1 : $x <= $w + 1 ? ($u - $x + 1) % 2 : -1));
+				$z -= ($x <= $u ? -1 : ($x == $u + 1 ? 0 : ($x <= $w ? ($x - $u + 1) % 2 : 2)));
+				foreach my $y ($a,$a+1,$z,$z+1) {
+					($y == $a && $x >= $u-1 && $x < $w) && next;
+					($y == $z+1 && $x >= $u && $x <= $w) && next;
+					push(@border,[$x,$y]);
+				}
+			}
+		}
+	}
+	return @border;
+}
+
+sub generate {
+	my ($self,$name) = @_;
+	(defined $name) || ($name = "#99f");
 	for ($self->{shape}) {
 		if (/0/) { # para # parallelogram/rhombus
 			foreach my $x (1 .. $self->{width}) {
 				foreach my $y (1 .. $self->{height}) {
-					my $h = Hexagon::placeHex($self->{order},$x - 1,$y - 1,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x - 1,$y - 1,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
 		} elsif (/1/) { # trii # increasing triangle
 			foreach my $x (0 .. $self->{width}) {
 				foreach my $y (0 .. $self->{width} - ($x + 1)) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
 		} elsif (/2/) { # trid # decreasing triangle
 			foreach my $x (0 .. $self->{width}) {
 				foreach my $y ($self->{width} - $x .. $self->{width}) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -238,7 +319,7 @@ sub map_gen {
 			foreach my $x (-$self->{width} .. $self->{width}) {
 				my ($a,$z) = (max(-$self->{width},-$x-$self->{width}),min($self->{width},-$x+$self->{width}));
 				foreach my $y ($a .. $z) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -261,7 +342,7 @@ sub map_gen {
 				$a -= ($x < $u ? 2 : ($x == $u ? 1 : $x <= $w + 1 ? ($u - $x + 1) % 2 : -1));
 				$z -= ($x <= $u ? -1 : ($x == $u + 1 ? 0 : ($x <= $w ? ($x - $u + 1) % 2 : 2)));
 				foreach my $y ($a .. $z) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -271,7 +352,7 @@ sub map_gen {
 			foreach my $x (0 .. $self->{height} - 1) {
 				my $xoff = floor($x/2);
 				foreach my $y (-$xoff .. $self->{width} - $xoff - 1) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => "#99f");
+					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -358,14 +439,16 @@ use Points; # contains Vertex package
 use Math::Trig qw( tan pi acos asin );
 
 sub new {
-	my ($class,$orientation,$sx,$sy,$ox,$oy) = @_;
+	my ($class,$orientation,$sx,$sy,$ox,$oy,$cx,$cy) = @_;
 	my $sz = Vertex->new(undef,"scrscl",$sx,$sy);
 	my $loc = Vertex->new(undef,"scrorig",$ox,$oy);
 	my $o = Hexagon::Orientation->new($orientation);
+	my $cent = [($cx or -$ox+7),($cy or -$oy+7)];
 	my $self = {
 		orientation => $o,
 		size => $sz,
 		origin => $loc,
+		center => $cent,
 	};
 	bless $self,$class;
 	return $self;
@@ -383,6 +466,17 @@ sub sx {
 sub sy {
 	return $_[0]->{size}->y;
 }
+
+sub offset {
+	my $self = shift;
+	my @offset = (${$self->{center}}[0] + $self->ox,${$self->{center}}[1] + $self->oy);
+	return @offset;
+}
+
+sub center {
+	return @{$_[0]->{center}};
+}
+
 sub hex_to_pixel {
 	my ($self,$h) = @_;
 	my $x = ($self->{orientation}->{f0} * $h->q + $self->{orientation}->{f1} * $h->r) * $self->sx;
@@ -392,10 +486,30 @@ sub hex_to_pixel {
 
 sub pixel_to_hex {
 	my ($self,$v) = @_;
+	my ($q,$r) = $self->pixel_to_axial($v,0);
+	return Hexagon::Fractional->new($q,$r,-$q-$r);
+}
+
+sub pixel_to_axial {
+	my ($self,$v,$round) = @_;
 	my ($x,$y) = (($v->x - $self->ox) / $self->sx,($v->y - $self->oy) / $self->sy);
 	my $q = $self->{orientation}->{b0} * $x + $self->{orientation}->{b1} * $y;
 	my $r = $self->{orientation}->{b2} * $x + $self->{orientation}->{b3} * $y;
-	return Hexagon::Fractional->new($q,$r,-$q-$r);
+	my $s = -$q-$r;
+	if ($round) {
+		my $dq = abs(int($q) - $q);
+		my $dr = abs(int($r) - $r);
+		my $ds = abs(int($s) - $s);
+		if ($dq > $dr and $dq > $ds) {
+			$q = -$r-$s;
+		} elsif($dr > $ds) {
+			$r = -$q-$s;
+#		} else {
+#			$s = -$q-$r;
+		}
+		return ($q,$r);
+	}
+	return ($q,$r);
 }
 
 sub corner_offset {
@@ -430,6 +544,24 @@ sub hex_to_lines {
 	return @segments;
 }
 
+sub hexlist_to_lines {
+	my ($self,$cx,$cy,@hexes) = @_;
+	my @lines;
+	my $v1;
+	my @colors = ('#00f','#0f0','#f00','#0ff','#ff0','#33f','#3f3','#f33','#66f','#6f6','#f66','#99f','#9f9','#f99','#ccf','#cfc','#fcc');
+	my $i = 0;
+	foreach (@hexes) {
+		my $v2 = $self->hex_to_pixel($_);
+		if (defined $v1) {
+			my $s = Segment->new(0,sprintf("%s%d",$_->name,$i),$v1->x + $cx + $self->ox,$v2->x + $cx + $self->ox,$v1->y + $cy + $self->oy,$v2->y + $cy + $self->oy);
+			$s->setMeta(color => $colors[$i++ % @colors]);
+			push(@lines,$s);
+		}
+		$v1 = $v2;
+	}
+	return @lines;
+}
+
 sub hex_to_poly {
 	my ($self,$h,$extra) = @_;
 	my @corners = $self->polygon_corners($h);
@@ -446,7 +578,7 @@ use POSIX qw( floor );
 sub new {
 	my ($class,$q,$r,$s,%profile) = @_;
 	# assert minimum two coords:
-	(defined $q and defined $r) || die "Hexagon::Hex must be created with at least two coordinates!\n";
+	(defined $q and defined $r) || die "Hexagon::Fractional must be created with at least two coordinates!\n";
 	(defined $s) || ($s = -$r-$q);
 	# assert coords sum as 0:
 	($q + $r + $s == 0) || ($s = -$r-$q);

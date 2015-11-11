@@ -545,7 +545,7 @@ sub setget {
 	if ($op == 0) {
 		$self->{identity} = $val if defined($val);
 		return $self->{identity};
-	} elsif ($op == 1) {	
+	} elsif ($op == 1) {
 		$self->{moniker} = $val if defined($val);
 		return $self->{moniker};
 	} else { # assume op is a key for the metadata hash -- give the user credit for using me properly.
@@ -698,7 +698,7 @@ sub getPointAtDist {
     $p->x($x + (cos($b) * $d));
     $p->y($y + (sin($b) * $d));
 	if ($whole) { $p->roundLoc(0); }
-	
+
     return $p;
 }
 
@@ -714,6 +714,7 @@ sub getAHeading {
 	# Temporary function for use until I can figure out why the trig-based algorithm isn't giving valid results
 	# This function extrapolates bearing based on relationship to known bearing (slope 1 = 45 degrees) and may not be accurate.
 	# TODO: Fix this!!!
+print "!";
 	my ($dx,$dy,$whole,$relative) = @_;
     if (not defined $whole) { $whole = 0; }
     if (not defined $relative) { $relative = 0; }
@@ -889,7 +890,7 @@ sub slopeFromAzimuth {
 	}
 	my $edge = ($az < $cornerbearings[0] ? ($az < $cornerbearings[3] ? ($az < $cornerbearings[2] ? ($az < $cornerbearings[1] ? 0 : 1) : 2) : 3) : 0);
 	unless ($cornershavebeenset) { $edge = "unknown"; }
-	
+
 	return ($slope,$edge);
 }
 

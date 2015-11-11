@@ -5,16 +5,22 @@ use Points;
 use MapDes;
 use MapDraw;
 use Common;
+use Hexagon;
 
 use Getopt::Long;
 
 my %bgfill = ( 'r' => 255, 'g' => 255, 'b' => 255 );
 
 sub mapSeed {
-		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$centertype,$showtheseed,$offsetx,$offsety,$forcecrossroads,$hexes,$hexsz) = @_;
+		my ($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$width,$height,$seed,$centertype,$showtheseed,$offsetx,$offsety,$forcecrossroads,$hexes,$grid,$scr) = @_;
 		srand($seed);
         print "Using map seed $seed...\n";
-        my ($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads,$hexes,$hexsz);
+		my ($nr,@routes);
+		if ($hexes) {
+			($nr,@routes) = MapDes::genHexMap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads,$grid,$scr);
+		} else {
+			($nr,@routes) = MapDes::genmap($highways,$secondaries,$ratio,$pointsofinterest,$maxroads,$centertype,$forcecrossroads);
+		}
 #        my @poi =
 #		print "- $nr routes\n";
 #		foreach my $i (0 .. $#routes) {
@@ -29,8 +35,11 @@ sub mapSeed {
 		if ($showtheseed) { $exargs{'seed'} = $seed; }
 		if ($offsetx) { $exargs{'xoff'} = $offsetx; }
 		if ($offsety) { $exargs{'yoff'} = $offsety; }
-        my $out = MapDraw::formSVG($width,$height,\@routes,\@boxen,%exargs);
-		return $out;
+		if ($hexes) {
+			$exargs{'grid'} = $grid;
+			$exargs{'screen'} = $scr;
+		}
+        MapDraw::formSVG($width,$height,\@routes,\@boxen,%exargs);
 }
 
 sub main {
@@ -46,6 +55,10 @@ sub main {
     my $h = 600; # Height of image
     my $hex = 0; # generate a map for use with a hex grid
     my $grid = 32; # how big is the grid (diagonals/rows)
+	my $grid2 = 0;
+	my $shape = 'hexb'; # shape of hex grid
+	my $order = 0; # hex grid parameter order (0-5)
+	my $scale = 15; # what radius does each hex have?
     my $fn = 'output.svg'; # Filename of map
 	my $disp = 0; # display seed on map (debug function)
 	my @seedlist; # list of seeds, read from file
@@ -53,24 +66,29 @@ sub main {
 	my $showhelp = 0;
 	my $crossroadssquare = 0; # secondaries and side roads meet larger roads at close to 90 degrees.
 	my $centertype = 0; # type of map to generate -=- default center mode
+	my ($map,$screen); # needed for hex maps.
 							$disp = 1; # for development. TODO: Remove this line when done tweaking generator
     GetOptions(
 		'help' => \$showhelp,
         'gui' => \$gui,
+	'scale|1=i' => \$scale,
 		'comp|c=s' => \$listfn,
         'depth|d=i' => \$depth,
         'highways|exits|e=i' => \$hiw,
         'file|f=s' => \$fn,
-	'cells|l=i' => \$grid,
+	'cells|g=i' => \$grid,
+	'cellshigh|i=i' => \$grid2,
 		'listseed|l' => \$disp,
         'map|m=i' => \$seed,
 	'hexagonal|n' => \$hex,
+	'order|o=i' => \$order,
         'poimode|p' => \$poi,
-		'squareint|q' => \$crossroadssquare,
+		'squareint|q=i' => \$crossroadssquare,
         'ratio|r=i' => \$rat,
         'secondary|s=i' => \$sec,
 		'type|t=i' => \$centertype,
         'max|x=i' => \$max,
+	'shape|y=s' => \$shape,
         'w=i' => \$w,
         'h=i' => \$h
         );
@@ -92,14 +110,19 @@ sub main {
 		if ($listfn ne '') {
 			@seedlist = Common::loadSeedsFrom($listfn);
 		}
-		 if (@seedlist) {
+		if ($hex) {
+#TODO: make a flag that will allow this limit to be overridden.
+			$map= Hexagon::Map->new($shape,$order,$grid,($grid2 or $grid));
+# TODO: hex orientation flag
+			$screen = Hexagon::Screen->new('left',$scale,$scale,$map->req_offset($scale),MapDes::getCenter());
+			$map->generate("none");
+		}
+		if (@seedlist) {
 # Start of seed loop
-			my @svglist;
 			my ($x,$y) = (0,0);
 			my $width = Common::selectWidth($w,scalar(@seedlist));
 			foreach my $seed (@seedlist) {
-				my $svgstring= mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,$x,$y,$crossroadssquare,$hex,$grid);
-				push(@svglist,$svgstring);
+				mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,$x,$y,$crossroadssquare,$hex,$map,$screen);
 				$x += $w;
 				if ($x >= $width) {
 					$x = 0;
@@ -107,12 +130,10 @@ sub main {
 				}
 # End of seed loop
 			}
-			foreach my $add (@svglist) {
-				$svg = "$svg$add\n";
-			}
 		} else {
-			$svg = mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,0,0,$crossroadssquare,$hex,$grid);
+			mapSeed($hiw,$sec,$rat,$poi,$max,$w,$h,$seed,$centertype,$disp,0,0,$crossroadssquare,$hex,$map,$screen);
 		}
+		my $svg = MapDraw::getSVGLayers();
         my ($result,$errstr) = MapDraw::saveSVG($svg,$fn);
         if ($result != 0) { print "Map could not be saved: $errstr"; }
         print "\n";
