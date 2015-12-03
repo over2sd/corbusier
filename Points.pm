@@ -495,6 +495,47 @@ sub describe {
     return $bio;
 }
 
+sub orient { # orients the line generally in a particular direction. Useful for preparing a set of lines for duplicate checking.
+#currently works in only x,y axes
+	my ($self,$dir) = @_;
+	$dir = 0 unless (defined $dir); # default to south/east
+	if ($dir == 0) { # s/e
+		if ($self->oy() > $self->ey()) { # unless ey > oy, line is upside down
+			$self->flip();
+		} elsif ($self->oy() == $self->ey() and $self->ox() > $self->ex()) { # unless ex > ox, line points west
+			$self->flip();
+		}
+		return;
+	} elsif ($dir == 1) { # n/e
+		if ($self->oy() < $self->ey()) { # unless ey > oy, line is upside down
+			$self->flip();
+		} elsif ($self->oy() == $self->ey() and $self->ox() > $self->ex()) { # unless ex > ox, line points west
+			$self->flip();
+		}
+		return;
+	} elsif ($dir == 2) { # n/w
+		if ($self->oy() < $self->ey()) { # unless ey > oy, line is upside down
+			$self->flip();
+		} elsif ($self->oy() == $self->ey() and $self->ox() < $self->ex()) { # unless ex > ox, line points west
+			$self->flip();
+		}
+		return;
+	} else { # s/w
+		if ($self->oy() > $self->ey()) { # unless ey > oy, line is upside down
+			$self->flip();
+		} elsif ($self->oy() == $self->ey() and $self->ox() < $self->ex()) { # unless ex > ox, line points west
+			$self->flip();
+		}
+		return;
+	}
+}
+
+sub flip {
+	my $self = shift;
+	my ($v,$w,$x,$y) = ($self->ex(),$self->ey(),$self->ox(),$self->oy());
+	return $self->set_ends($v,$x,$w,$y);
+}
+
 ################################ Nodes Library #################################
 package Node;
 use parent -norequire, 'Vertex';
@@ -1005,6 +1046,43 @@ sub twist {
 	$origlin->move_origin_only($ep->x(),$ep->y());
 	$origlin->name(sprintf("%s-%s",$origlin->name(),shift @letters));
 	return @lines;
+}
+
+sub seg_remove_dup {
+	my ($list,$orient,$precision) = @_;
+	my %xvals;
+	defined($precision) or $precision = 0;
+	my @uniquelines;
+	foreach (@$list) {
+		defined($orient) && $_->orient($orient); # orient all lines the same way (pointing south or east) to make comparing them simpler.
+		my $key = sprintf("%s",nround($precision,$_->ox()));
+		unless (exists $xvals{$key}) {
+			$xvals{$key} = [];
+		}
+		push (@{$xvals{$key}},$_);
+	}
+	foreach my $k (keys %xvals) {
+#		print "Checking $k...";
+		my @lines = unique_segments($xvals{$k});
+		push(@uniquelines,@lines);
+	}
+	return @uniquelines;
+}
+
+sub unique_segments {
+	my $lines = shift;
+	my @uniques;
+	foreach my $a (@$lines) {
+		my $u = 1;
+		foreach my $b (@uniques) {
+			(int($a->oy()) == int($b->oy()) && int($a->ey()) == int($b->ey()) &&
+			 int($a->ox()) == int($b->ox()) && int($a->ex()) == int($b->ex()))
+			 and $u = 0;
+		}
+		my $c = (($u and push(@uniques,$a)) ? '' : '-');
+		print $c if (0);
+	}
+	return @uniques;
 }
 
 sub enableTermcolors {

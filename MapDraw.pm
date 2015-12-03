@@ -33,6 +33,8 @@ sub formLayerObject {
 	unless ($#layers >= $layer) { foreach (scalar @layers .. $layer) { $layers[$_] = [];}};
 	# form SVG as usual
 	my $out = "";
+	(defined $exargs{'xoff'}) || ($exargs{'xoff'} = 0);
+	(defined $exargs{'yoff'}) || ($exargs{'yoff'} = 0);
 	for ($obtype) {
 		if (/box/) {
 			foreach my $br (@{ $objects }) {
@@ -40,13 +42,16 @@ sub formLayerObject {
 				$out = sprintf("$out	<rect x=\"%d\" y=\"%d\" height=\"%d\" width=\"%d\" fill=\"%s\" />\n",$box{'x'} + $exargs{'xoff'},$box{'y'} + $exargs{'yoff'},$box{'h'},$box{'w'},$box{'f'});
 			}
 		} elsif (/cir/) {
-die "Not coded";
+			foreach my $cr (@{ $objects }) {
+				my %c = %$cr;
+				$out = sprintf("$out	<circle cx=\"%d\" cy=\"%d\" r=\"%d\" fill=\"%s\" stroke=\"%s\" />\n",($c{x} + ($c{xoff} or 0)),($c{y} + ($c{yoff} or 0)),$c{r},($c{fill} or 'none'),($c{stroke} or "#000"));
+			}
 		} elsif (/pol/) {
 			foreach my $points (@$objects) {
-				my ($x,$y) = ($exargs{x} or 0,$exargs{y} or 0);
+				my ($x,$y) = (($exargs{x} or 0),($exargs{y} or 0));
 				$out = sprintf("$out	<polygon points=\"%s\" style=\"fill:%s;stroke:#000;\" />\n",$points,$exargs{fill});
-				($exargs{coords}) && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$exargs{x},$exargs{y},$exargs{loc}));
-				($exargs{text} && $exargs{text} ne "") && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$exargs{x},$exargs{y},$exargs{text}));
+				($exargs{coords} && defined $exargs{loc}) && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$x,$y,$exargs{loc}));
+				($exargs{text} && $exargs{text} ne "") && ($out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"0.8em\" fill=\"#00c\">%s</text>\n",$x,$y,$exargs{text}));
 			}
 		} elsif (/lin/) {
 			my @lines = @$objects;
@@ -60,10 +65,12 @@ die "Not coded";
 			my $boxw = $$objects[0];
 			my $seed = $$objects[2];
 			$out = sprintf("$out	<rect x=\"%d\" y=\"%d\" width=\"$boxw\" height=\"40\" fill=\"#6ff\" />\n	<text x=\"%d\" y=\"%d\" font-size=\"3.2em\" fill=\"#00c\">#$seed</text>\n",$exargs{xoff} + $$objects[1] - $boxw,$exargs{yoff},$exargs{xoff} + $$objects[1] - $boxw + 5,$exargs{yoff} + 35);
+		} elsif (/text/) {
+			$out = sprintf("$out	<text x=\"%d\" y=\"%d\" font-size=\"1.0em\" fill=\"%s\">%s</text>\n",$exargs{xoff} + 5,$exargs{yoff} + 35,$$objects[1],$$objects[0]);
 		}
 	}
 	# store SVG in layer.
-	unless ($obtype =~ /poly/) { print "Storing $obtype (x" . scalar @$objects . ") in layer $layer..."; }
+	unless ($obtype =~ /poly/ || scalar @$objects < 2) { print "Storing $obtype (x" . scalar @$objects . ") in layer $layer..."; }
 	push(@{ $layers[$layer] },$out);
 }
 
@@ -91,14 +98,14 @@ sub formSVG {
 	(defined $exargs{'yoff'}) || ($exargs{'yoff'} = $offsety);
 	formLayerObject(0,'boxes',$boxr,%exargs);
 	if (defined $exargs{'grid'} and defined $exargs{'screen'}) {
-		$exargs{'center'} = [$w/2,$h/2];
+#		$exargs{'center'} = [$w/2,$h/2];
 		$exargs{fill} = "#6f6";
-		formGrid($exargs{'screen'},$exargs{'grid'},%exargs);
+		formGrid($exargs{'screen'},$exargs{'grid'},%exargs); # layer 1
 	}
     my $curcol = incColor(); # later, do this only when switching road types, or not at all.
-	formLayerObject(2,'lines',$linesr,%exargs);
+	formLayerObject(3,'lines',$linesr,%exargs); # layer 2 is used by HexMap for POI, so this is layer 3.
 	if ($showseed) {
-		formLayerObject(3,'seed',[160,$w,$seed],%exargs);
+		formLayerObject(4,'seed',[160,$w,$seed],%exargs);
 	}
 }
 
@@ -110,14 +117,17 @@ sub pointify {
 	$r = ($hex->q < 0 ? 51 : $hex->q * 16 % 200 + 52);
 	$g = ($hex->r < 0 ? 51 : $hex->r * 16 % 200 + 52);
 	$b = ($hex->s < 0 ? 51 : $hex->s * 16 % 200 + 52);
-	my $fill = ($hex->name =~ m/^#/ || $hex->name eq 'none' ? $hex->name : sprintf("#%x%x%x",$r,$g,$b));
+	my $fill = ($hex->fill =~ m/^#/ || $hex->fill eq 'none' ? $hex->fill : sprintf("#%x%x%x",$r,$g,$b));
+    $offx -= 0; # 255
+    $offy += 0; # 138
 	foreach (0 .. $#pointlist) {
 		unless ($_ == 0) { $points = "$points "; }
 		my $v = $pointlist[$_];
-		$points = sprintf("%s%.3f,%.3f ",$points,$v->x + $offx,$v->y + $offy);
+		$points = sprintf("%s%d,%d ",$points,$v->x + $offx,$v->y + $offy);
 	}
 	# text location, near point 3 of the hex:
-	my ($x,$y) = ($pointlist[2]->x + $offx + 3,$pointlist[2]->y + $offy - 4);
+	my ($x,$y) = (($pointlist[2]->x or 0) + $offx + 3,($pointlist[2]->y or 0) + $offy - 4);
+$screen->{debug} = 0;
 	return ($points,$x,$y,$fill);
 }
 
@@ -126,24 +136,25 @@ sub formGrid {
     my ($scr,$grid,%exargs) = @_;
     my %gridobs = %{ $grid->{grid} };
     my $coords = ($exargs{showcoord} or 0);
-    my $offsetx = ($exargs{offsetx} or 0); # FIX
-    my $offsety = ($exargs{offsety} or 0); # FIX
+    my $offsetx = ($exargs{xoff} or 0);
+    my $offsety = ($exargs{yoff} or 0);
     my $mult = $grid->{width};
+
+# test stuff
     my $center = ($exargs{center} or [$scr->sx * $mult,$scr->sy * $mult]);
-#print "Center: " . join(',',@$center) . " Offset: $offsetx,$offsety =>";
-#    $out = sprintf("$out	<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#000\" />\n",$$center[0] + $offsetx,0 + $offsety,$$center[0] + $offsetx,$$center[1] * 2 + $offsety);
-#    $out = sprintf("$out	<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#000\" />\n",0 + $offsetx,$$center[1] + $offsety,$$center[0] * 2 + $offsetx,$$center[1] + $offsety);
-    $offsetx += $$center[0];
-    $offsety += $$center[1];
-#    $offsetx -= 622;
-#    $offsety -= 360;
-#print "$offsetx,$offsety\n";
+print "Center: " . join(',',@$center) . " Offset: $offsetx,$offsety =>";
+	my $hor = Segment->new(undef,'horiz',$$center[0] + $offsetx,$$center[0] + $offsetx,0 + $offsety,$$center[1] * 2 + $offsety);
+	my $ver = Segment->new(undef,'vert',0 + $offsetx,$$center[0] * 2 + $offsetx,$$center[1] + $offsety,$$center[1] + $offsety);
+	formLayerObject(1,'lines',[$hor,$ver]);
+# test stuff ends
+
     foreach (keys %gridobs) {
 		my $ob = $gridobs{$_};
 #print "\n'$_' forming object " . $ob->Iama . " at " . $ob->loc . "...";
-		my ($points,$x,$y,$fill) = pointify($scr,$ob,$offsetx,$offsety);
+		my ($points,$x,$y,$fill) = pointify($scr,$ob,$offsetx,$offsety,($ob->fill or undef));
 		my $text = $ob->{text};
-		formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => $coords, fill => $fill);
+		my $loc = $ob->loc;
+		formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => $coords, fill => $fill,loc => $loc);
     }
 }
 

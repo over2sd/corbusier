@@ -38,7 +38,10 @@ sub mapSeed {
 		if ($hexes) {
 			$exargs{'grid'} = $grid;
 			$exargs{'screen'} = $scr;
+			my @center = $scr->center();
+			$exargs{'center'} = \@center;
 		}
+		@routes = MapDes::trimDuplicates(\@routes,(chkreverse => 1));
         MapDraw::formSVG($width,$height,\@routes,\@boxen,%exargs);
 }
 
@@ -115,7 +118,8 @@ sub main {
 			$map= Hexagon::Map->new($shape,$order,$grid,($grid2 or $grid));
 # TODO: hex orientation flag
 			$screen = Hexagon::Screen->new('left',$scale,$scale,$map->req_offset($scale),MapDes::getCenter());
-			$map->generate("none");
+#			$map->generate("none");
+			$map->addCenter("#f0f");
 		}
 		if (@seedlist) {
 # Start of seed loop

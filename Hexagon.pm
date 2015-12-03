@@ -74,6 +74,7 @@ sub new {
 		s => $s,
 		name => ($profile{name} or "$q$r$s"),
 		text => ($profile{text} or ""),
+		fill => ($profile{fill} or ""),
 	};
 	bless $self,$class;
 	return $self;
@@ -186,7 +187,7 @@ sub hex_lerp { # linear interpolation
 }
 
 sub hex_linedraw {
-	my ($self,$h) = @_;
+	my ($self,$h,%extra) = @_;
 	my $n = $self->distance($h);
 #print "\n>" . $self->loc . "--" . $h->loc . "< ($n Hexes)\n";
 	my @results;
@@ -195,6 +196,11 @@ sub hex_linedraw {
 #		push(@results,$self->neighbor_toward($h));
 #		push(@results,Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_)));
 		my $h = Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_));
+		if (defined($extra{map}) and ref($extra{map}) eq "Hexagon::Map") {
+			$h->set_fill($extra{color}) if (defined($extra{color}));
+			$extra{map}->add_hex($h) unless $extra{map}->is_hex_at($h->intloc());
+#			$map->{grid}{$h->loc} = $h;
+		}
 #print "=> " . $h->loc . "\n";
 		push(@results,$h);
 	}
@@ -220,6 +226,15 @@ sub rename {
 
 sub name {
 	return $_[0]->{name};
+}
+
+sub set_fill {
+	my ($self,$color) = @_;
+	$self->{fill} = $color;
+}
+
+sub fill {
+	return $_[0]->{fill};
 }
 
 sub intpairs_to_azimuth {
@@ -258,7 +273,7 @@ sub new {
 	my $self = {
 		shape => $shapenum,
 		width => $width,
-		height => ($height or 0),
+		height => ($height or $width or 0),
 		order => $order,
 		grid => {},
 	};
@@ -267,7 +282,7 @@ sub new {
 }
 
 sub genborder {
-	my ($self) = @_;
+	my ($self,%args) = @_;
 	my @border;
 	for ($self->{shape}) {
 		if (/4/) {
@@ -283,12 +298,18 @@ sub genborder {
 					($y == $a && $x >= $u-1 && $x < $w) && next;
 					($y == $z+1 && $x >= $u && $x <= $w) && next;
 					push(@border,[$x,$y]);
+					if (defined $args{store} and $args{store} = 1) {
+						my $h = Hexagon::placeHex($self->{order},$x,$y,fill => "#69c");
+						${$self->{grid}}{$h->loc()} = $h;
+					}
 				}
 			}
 		}
 	}
 	return @border;
 }
+
+
 
 sub generate {
 	my ($self,$name) = @_;
@@ -297,21 +318,21 @@ sub generate {
 		if (/0/) { # para # parallelogram/rhombus
 			foreach my $x (1 .. $self->{width}) {
 				foreach my $y (1 .. $self->{height}) {
-					my $h = Hexagon::placeHex($self->{order},$x - 1,$y - 1,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x - 1,$y - 1,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
 		} elsif (/1/) { # trii # increasing triangle
 			foreach my $x (0 .. $self->{width}) {
 				foreach my $y (0 .. $self->{width} - ($x + 1)) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x,$y,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
 		} elsif (/2/) { # trid # decreasing triangle
 			foreach my $x (0 .. $self->{width}) {
 				foreach my $y ($self->{width} - $x .. $self->{width}) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x,$y,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -319,7 +340,7 @@ sub generate {
 			foreach my $x (-$self->{width} .. $self->{width}) {
 				my ($a,$z) = (max(-$self->{width},-$x-$self->{width}),min($self->{width},-$x+$self->{width}));
 				foreach my $y ($a .. $z) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x,$y,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -342,17 +363,17 @@ sub generate {
 				$a -= ($x < $u ? 2 : ($x == $u ? 1 : $x <= $w + 1 ? ($u - $x + 1) % 2 : -1));
 				$z -= ($x <= $u ? -1 : ($x == $u + 1 ? 0 : ($x <= $w ? ($x - $u + 1) % 2 : 2)));
 				foreach my $y ($a .. $z) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x,$y,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
-			my $center = Hexagon::placeHex($self->{order},$v,$v,name => "#369");
+			my $center = Hexagon::placeHex($self->{order},$v,$v,fill => "#369");
 			${$self->{grid}}{center} = $center;
 		} elsif (/5/) { # rect
 			foreach my $x (0 .. $self->{height} - 1) {
 				my $xoff = floor($x/2);
 				foreach my $y (-$xoff .. $self->{width} - $xoff - 1) {
-					my $h = Hexagon::placeHex($self->{order},$x,$y,name => $name);
+					my $h = Hexagon::placeHex($self->{order},$x,$y,fill => $name);
 					${$self->{grid}}{$h->loc()} = $h;
 				}
 			}
@@ -360,6 +381,13 @@ sub generate {
 			die "Shape $_ not implemented.";
 		}
 	}
+}
+
+sub addCenter {
+	my ($self,$fill) = shift;
+	my $center = $self->add_hex_at(int($self->{width}/2),int($self->{height}/2),fill => ($fill or "#f00"));
+	$self->{grid}{center} = $center;
+	return $center;
 }
 
 sub req_offset {
@@ -377,7 +405,8 @@ sub req_offset {
 		} elsif (/3/) { # hexa # radius-walk hexes (larger map hex is 90 degrees rotated from shape of component hexes)
 			# hexa starts from center, so it's always centered.
 		} elsif (/4/) { # hexb # RPG-style hexes (larger hex matches orientation of smaller hexes, unlike hexa, which makes larger hex orientation 90 degrees from its component hexes)
-			($xoff,$yoff) = (-0.6500744 * $self->{width} * $scale,-(0.375 * $self->{width} * $scale) + ($self->{width} % 4 > 0 && $self->{width} % 4 < 3 ? 23 : 0));
+			($xoff,$yoff) = (-1.30 * $self->{width} * $scale,-(0.75 * $self->{width} * $scale) + ($self->{width} % 4 > 0 && $self->{width} % 4 < 3 ? 23 : 0));
+#			($xoff,$yoff) = (-0.6500744 * $self->{width} * $scale,-(0.375 * $self->{width} * $scale) + ($self->{width} % 4 > 0 && $self->{width} % 4 < 3 ? 23 : 0));
 		} elsif (/5/) { # rect
 			($xoff,$yoff) = (-0.475 * $self->{width} * $scale,-0.19 * $self->{height} * $scale);
 		}
@@ -399,6 +428,52 @@ sub width {
 
 sub height {
 	return $_[0]->{height};
+}
+
+sub neighbor_toward {
+	my ($self,$h,$direction,$extras) = @_;
+	my $text = (ref($h) eq "Hexagon::Hex" ? $h->loc : $h );
+#	$self->{order}
+	my @adders = ([1,-1],[1,0],[0,1],[-1,1],[-1,0],[0,-1]);
+# TODO: add adders to coords and return hex location in that direction
+	my ($x,$y,$z) = $h->intloc();
+	$x += ${$adders[$direction]}[0];
+	$y += ${$adders[$direction]}[1];
+	return ($x,$y);
+}
+
+sub open_neighbors {
+	my ($self,$h) = @_;
+	my $mask = 31;
+	foreach (0 .. 5) {
+		$mask = Common::toggleBit($_,$mask) if $self->is_hex_at($h,$_);
+	}
+	return $mask;
+}
+
+sub add_hex_at { # assumes you want to replace an existing hex if coords repeat.
+	my ($self,$x,$y,%profile) = @_;
+	my $h = Hexagon::placeHex($self->{order},$x,$y,%profile);
+	$self->{grid}{$h->loc} = $h;
+	return $h; # just in case the caller wants it
+}
+
+sub is_hex_at {
+	my ($self,$x,$y) = @_;
+#print "got $self,$x,$y...";
+	my @qrs = Hexagon::toCube($self->{order},$x,$y);
+	my $loc = sprintf("%i,%i",$qrs[0],$qrs[1]);
+#print "$loc...";
+	my $h = ($self->{grid}{$loc} or undef);
+#print " " . (defined($h) ? 1 : 0) . " .. ";
+	return defined($h);
+}
+
+sub add_hex {
+	my ($self,$h) = @_;
+	my $loc = $h->loc;
+	die "add_hex was not given a valid hex" unless defined($loc);
+	$self->{grid}{$loc} = $h;
 }
 
 package Hexagon::Orientation;
@@ -443,12 +518,13 @@ sub new {
 	my $sz = Vertex->new(undef,"scrscl",$sx,$sy);
 	my $loc = Vertex->new(undef,"scrorig",$ox,$oy);
 	my $o = Hexagon::Orientation->new($orientation);
-	my $cent = [($cx or -$ox+7),($cy or -$oy+7)];
+	my $cent = [(defined $cx ? $cx : -$ox+7),(defined $cy ? $cy : -$oy+7)];
 	my $self = {
 		orientation => $o,
 		size => $sz,
 		origin => $loc,
 		center => $cent,
+		debug => 0,
 	};
 	bless $self,$class;
 	return $self;
@@ -469,8 +545,19 @@ sub sy {
 
 sub offset {
 	my $self = shift;
-	my @offset = (${$self->{center}}[0] + $self->ox,${$self->{center}}[1] + $self->oy);
+	my @offset = ($self->xoff,$self->yoff);
+print " =o " if $self->{debug};
 	return @offset;
+}
+
+sub xoff {
+	my $self = shift;
+	return ${$self->{center}}[0] + $self->ox;
+}
+
+sub yoff {
+	my $self = shift;
+	return ${$self->{center}}[1] + $self->oy;
 }
 
 sub center {
@@ -481,7 +568,8 @@ sub hex_to_pixel {
 	my ($self,$h) = @_;
 	my $x = ($self->{orientation}->{f0} * $h->q + $self->{orientation}->{f1} * $h->r) * $self->sx;
 	my $y = ($self->{orientation}->{f2} * $h->q + $self->{orientation}->{f3} * $h->r) * $self->sy;
-	return Vertex->new(undef,undef,$x + $self->ox,$y + $self->oy);
+printf(" +o %s,%s ",$self->xoff,$self->yoff) if $self->{debug};
+	return Vertex->new(undef,undef,$x + $self->xoff,$y + $self->yoff);
 }
 
 sub pixel_to_hex {
@@ -492,7 +580,8 @@ sub pixel_to_hex {
 
 sub pixel_to_axial {
 	my ($self,$v,$round) = @_;
-	my ($x,$y) = (($v->x - $self->ox) / $self->sx,($v->y - $self->oy) / $self->sy);
+print " -o " if $self->{debug};
+	my ($x,$y) = (($v->x - $self->xoff) / $self->sx,($v->y - $self->yoff) / $self->sy);
 	my $q = $self->{orientation}->{b0} * $x + $self->{orientation}->{b1} * $y;
 	my $r = $self->{orientation}->{b2} * $x + $self->{orientation}->{b3} * $y;
 	my $s = -$q-$r;
@@ -525,7 +614,7 @@ sub polygon_corners {
 	my $c = $self->hex_to_pixel($h);
 	foreach (0..5) {
 		my $o = $self->corner_offset($_);
-		push(@corners,Vertex->new($_,$h->q . "," . $h->r,$c->x + $o->x + $self->ox, $c->y + $o->y + $self->oy));
+		push(@corners,Vertex->new($_,$h->q . "," . $h->r,$c->x + $o->x, $c->y + $o->y));
 	}
 	return @corners;
 }
@@ -545,15 +634,15 @@ sub hex_to_lines {
 }
 
 sub hexlist_to_lines {
-	my ($self,$cx,$cy,@hexes) = @_;
+	my ($self,@hexes) = @_;
 	my @lines;
 	my $v1;
 	my @colors = ('#00f','#0f0','#f00','#0ff','#ff0','#33f','#3f3','#f33','#66f','#6f6','#f66','#99f','#9f9','#f99','#ccf','#cfc','#fcc');
 	my $i = 0;
 	foreach (@hexes) {
-		my $v2 = $self->hex_to_pixel($_);
+		my $v2 = $self->hex_to_pixel($_); # offsets are built into this function already
 		if (defined $v1) {
-			my $s = Segment->new(0,sprintf("%s%d",$_->name,$i),$v1->x + $cx + $self->ox,$v2->x + $cx + $self->ox,$v1->y + $cy + $self->oy,$v2->y + $cy + $self->oy);
+			my $s = Segment->new(0,sprintf("%s%d",$_->name,$i),$v1->x,$v2->x,$v1->y,$v2->y);
 			$s->setMeta(color => $colors[$i++ % @colors]);
 			push(@lines,$s);
 		}

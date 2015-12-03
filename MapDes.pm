@@ -35,6 +35,7 @@ sub genmap {
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
 	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$centertype,$squareintersections);
 
+	@rs = Points::seg_remove_dup(\@rs,0); # trim out duplicate segments to make drawing more efficient
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -50,6 +51,7 @@ sub moveIfNear {
 	# TODO: Sanity checks go here
 	my $altered = 0;
 	my $endpoint = $end_index;
+die "Bad line" unless (defined $line);
 	if ($debug > 1) { print "Comparing length " . sprintf("%.2f",$line->length()) . " to points... "; }
 	foreach my $j (0 .. $#checklist) {
 		if ($j != $end_index and $j != $origin_index) {
@@ -306,7 +308,7 @@ sub branchmap {
 	if ($divisor < ($hiw / 3)) {
 		$needed = $hiw / 3 - $divisor;
 	}
-	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed,\$unit);
+	@sqs = genSquares($joins,$centertype,0.75,\@waypoints,$needed,\$unit,0.75); #1/12
 	# connect all village squares
 	print "debug $numroutes ";
 	my @irts = connectSqs(\@sqs,\@waypoints,$centertype,\$numroutes);
@@ -334,11 +336,11 @@ sub branchmap {
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth), 3 - 2 or 3 central points, (good for river towns?)
 sub genSquares {
 	if ($debug > 1) { print "genSquares(@_)\n" };
-	my ($qty,$centertype,$variance,$waypointsref,$wpqty,$unitref) = @_;
-	unless ($qty) { return (); }
+	my ($qty,$centertype,$variance,$waypointsref,$wpqty,$unitref,$scale) = @_;
+	unless ($qty and defined $scale) { return (); }
 	my $width = $mdconfig{width};
 	my $height = $mdconfig{height};
-	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/12,360/(($qty*2) or 1),getCenter(),int(rand(180)));
+	my ($unit,$azunit,$cx,$cy,$centaz) = (min($width,$height)/10,360/(($qty*2) or 1),getCenter(),int(rand(180)));
 print "\nmy (unit,azunit,cx,cy,centaz) = ($unit,$azunit,$cx,$cy,$centaz);\n";
 	$$unitref = $unit; # store unit for caller
 	# Possible switch: offset all positions by +/- 1 * $unit?
@@ -349,18 +351,20 @@ print "\nmy (unit,azunit,cx,cy,centaz) = ($unit,$azunit,$cx,$cy,$centaz);\n";
 	}
 	foreach my $i (0 .. $centqty) {
 		unless ($centqty) { last; }
-		my $base = 120 * $i;
-		my $p = Points::choosePointAtDist($cx,$cy,$unit/2,$base,$base+60,$centaz,1);
+		my $base = 120 * $i + rand(15);
+		my $actualdist = $unit*(0.5 + rand(1))*$scale;
+		my $p = Points::choosePointAtDist($cx,$cy,$actualdist,$base,$base+60,$centaz,1);
 		push(@squares,$p);
 		if (@squares >= $qty) { last; }
 	}
 	my $remainingsquares = $qty - @squares;
 	print "Done: " . @squares . " Remaining: $remainingsquares...\n";
-	my $base = (@squares ? rand($#squares * $azunit) : rand(3) * $azunit);
+	my $base = (@squares ? rand(($#squares + 3) * $azunit) : rand(3) * $azunit);
 	while ($remainingsquares > 0) {
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth)
-		my $p = Points::choosePointAtDist($cx,$cy,$unit,$base,$base+$azunit,0,1);
-		$base += $azunit * 2;
+		my $actualdist = $unit * (1.55 + rand(1)) * $scale;
+		my $p = Points::choosePointAtDist($cx,$cy,$actualdist,$base,$base+$azunit,0,1);
+		$base += $azunit * (1+rand(3));
 		push(@squares,$p);
 		$remainingsquares--;
 	}
@@ -419,7 +423,7 @@ print "\nmy (unit,azunit,cx,cy,centaz) = ($unit,$azunit,$cx,$cy,$centaz);\n";
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth)
 
 sub connectSqs {
-	my ($sqref,$wpref,$centertype,$numroutes) = @_;
+	my ($sqref,$wpref,$centertype,$numroutes,%exargs) = @_;
 	print "Linking village squares..";
 	if ($debug > 1) { print "connectSqs(@_)\n"; }
 	my @roads;
@@ -434,6 +438,7 @@ sub connectSqs {
 				my $next = $$sqref[$i];
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				print "Forming ring line " . $line->describe(1) . "\n";
 				$line->immobilize();
 				push(@roads,$line);
@@ -443,6 +448,7 @@ sub connectSqs {
 				my $next = $$sqref[0];
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				print "Forming ring line " . $line->describe(1) . "\n";
 				$line->immobilize();
 				push(@roads,$line);
@@ -456,6 +462,7 @@ sub connectSqs {
 			foreach my $i (1 .. $#sqs) {	 # link point to all other points
 				if ($i != $lowindex) {
 					my $line = linkNearest($$numroutes,$sqs[$i],sprintf("Road%d",$i),0.67,25,@sqs[0 .. $i-1]);
+					$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 					$line->immobilize();
 					push(@roads,$line);
 					$$numroutes++;
@@ -474,6 +481,7 @@ sub connectSqs {
 					$line->set_ends($sqs[$i]->x(),$sqs[$lowindex]->x(),$sqs[$i]->y(),$sqs[$lowindex]->y());
 					moveIfNear($line,$i,$lowindex,20,@sqs);
 					undoIfIsolated($line,\@roads,$sqs[$lowindex]->x(),$sqs[$lowindex]->y());
+					$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 					$line->immobilize();
 	#			  Save these highways to a separate list that will be added to the end of the routes, so other roads don't come off them.
 					push(@roads,$line);
@@ -491,12 +499,13 @@ sub connectSqs {
 			foreach (@$sqref) {
 				push(@srindex,$_->getMeta("azimuth"));
 			}
-			my ($sorteda,$index) = listSort(\@srindex,@$sqref);
+			my ($sorteda,$index) = Common::listSort(\@srindex,@$sqref);
 			foreach (@$wpref) {
 				my $i = Common::findClosest($_->getMeta("azimuth"),@$index);
 				my $j = $$sorteda[$i];
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($_->x(),$j->x(),$_->y(),$j->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				$line->immobilize();
 				push(@roads,$line);
 			}
@@ -510,12 +519,13 @@ sub connectSqs {
 				push(@srindex,$_->getMeta("azimuth"));
 				push(@ring,$_);
 			}
-			my ($sorteda,$index) = listSort(\@srindex,@ring);
+			my ($sorteda,$index) = Common::listSort(\@srindex,@ring);
 			my $here = $$sorteda[0];
 			foreach my $i (1 .. $#$sorteda) {
 				my $next = $$sorteda[$i];
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				$line->immobilize();
 				push(@roads,$line);
 				$here = $next;
@@ -524,6 +534,7 @@ sub connectSqs {
 				my $next = $$sorteda[0];
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($here->x(),$next->x(),$here->y(),$next->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				$line->immobilize();
 				push(@roads,$line);
 			}
@@ -533,6 +544,7 @@ sub connectSqs {
 				my $lowindex = Points::getClosest($w->x(),$w->y(),$sqref);
 				my $line = Segment->new($$numroutes,sprintf("Road%d",++$$numroutes));
 				$line->set_ends($w->x(),$$sqref[$lowindex]->x(),$w->y(),$$sqref[$lowindex]->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				$line->immobilize();
 				push(@roads,$line);
 			}
@@ -544,6 +556,7 @@ sub connectSqs {
 				my $h = $mdconfig{height};
 				$$wpref[$vi]->clip(0,0,$w,$h);
 				$line->set_ends($$wpref[$vi]->x(),$$sqref[$closest]->x(),$$wpref[$vi]->y(),$$sqref[$closest]->y());
+				$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
 				$line->immobilize();
 				push(@roads,$line);
 			}
@@ -913,21 +926,18 @@ sub genHexMap {
 	# ensure enough junctions for highways to not look like a panicked exodus
 	($divisor < ($hiw / 3)) && ($needed = $hiw / 3 - $divisor);
 	# choose squares
-	my @squares = genSquares($joins,$centyp,0.75,\@waypoints,$needed,\$unit);
-	# TODO: add here function to store square/POI markers in an SVG holder.
+	my @squares = genSquares($joins,$centyp,0.75,\@waypoints,$needed,\$unit,1.1);
 print "Received " . scalar @squares . " squares...";
 	foreach (@squares) {
-		$_->move($_->x + $screen->ox,$_->y + $screen->oy);
-		# KEEP previous line when removing helper hex drawing lines
-		my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$screen->pixel_to_hex($_)->hex_round,$screen->center);
-		my $text = sprintf("%d,%d",$screen->pixel_to_axial($_,1));
-print $text . "\n";
-		MapDraw::formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => 1, fill => $fill);
+		my ($cx,$cy) = $screen->offset();
+		my $color = MapDraw::incColor();
+		drawPOI($_,{r => int($screen->sx / 4), f => $color,xoff => $cx, yoff => $cy});
+		drawHexAt($screen,$_); # TODO: remove from final version
 	}
 	# connect all village squares
 	print "debug $nr ";
 	my @irts = connectSqs(\@squares,\@waypoints,$centyp,\$nr);
-	@irts = connectSqsHex($screen,@irts);
+	@irts = connectSqsHex($screen,\@irts,$g); #,color => $color);
 	push(@routes,@irts);
 	# center squares in hexes
 	my @border = $g->genborder(); # get possible exits
@@ -935,34 +945,35 @@ print $text . "\n";
 	my @exits = pickExitHexes($hiw,$screen,$g,@border);
 	# find nearest square
 	my @erts;
+	my $color = MapDraw::incColor();
 	foreach (@exits) {
 		my $dest = getClosest($screen,$_,@squares);
-		my @steps = getRoute($screen,$_,$dest);
+		my @steps = getRoute($screen,$_,$dest,map => $g,color => $color);
 		push(@erts,@steps);
 	}
 	push (@routes,@erts);
 	$nr += scalar @exits;
 #	foreach (@exits) {
-#		my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$_,int(0.5 + $mdconfig{width} /2),int(0.5 + $mdconfig{height} /2));
+#		my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$_,0,0);
 #		my $text = $_->{text};
 #		MapDraw::formLayerObject(1,'polygon',[$points,],x => $x,y => $y, text => $text, coords => 1, fill => $fill, loc => $_->loc);
 #	}
 	# choose side roads
 	# look for places to add minor roads
 	# return or draw map
+	@routes = Points::seg_remove_dup(\@routes,0); # trim out duplicate segments to make drawing more efficient
 	return $nr,@routes;
 }
 
 sub getRoute { # shorthand
-	my ($scr,$start,$end) = @_;
-	my ($cx,$cy) = getCenter();
-	return $scr->hexlist_to_lines(($cx or 0),($cy or 0),$start->hex_linedraw($end));
+	my ($scr,$start,$end,%args) = @_;
+	return $scr->hexlist_to_lines($start->hex_linedraw($end,%args));
 }
+
 sub connectSqsHex {
-	my ($screen,@routes) = @_;
+	my ($screen,$routes,$map,%args) = @_;
 	my @hexrts;
-	my ($cx,$cy) = getCenter();
-	foreach my $h (@routes) {
+	foreach my $h (@$routes) {
 printf("%d,%d - %d,%d\n",$h->ox,$h->oy,$h->ex,$h->ey);
 		my $sv = Vertex->new(undef,undef,$h->ox,$h->oy);
 		my $ev = Vertex->new(undef,undef,$h->ex,$h->ey);
@@ -970,7 +981,18 @@ printf("%d,%d - %d,%d\n",$h->ox,$h->oy,$h->ex,$h->ey);
 		my $ef = $screen->pixel_to_hex($ev);
 		my $sd = $sf->hex_round();
 		my $ed = $ef->hex_round();
-		push(@hexrts,getRoute($screen,$sd,$ed));
+		if (defined($map)) {
+#			$map->add_hex($ed) unless $map->is_hex_at($ed->intloc());
+#			$map->add_hex($sd) unless $map->is_hex_at($sd->intloc());
+			$args{map} = $map;
+			$args{color} = "#6cc" unless defined ($args{color});
+		}
+		push(@hexrts,getRoute($screen,$sd,$ed,%args));
+	}
+	if (1) { # orient lines
+		foreach (@hexrts) {
+			$_->orient(0); # orient line south (or east)
+		}
 	}
 	return @hexrts;
 }
@@ -1025,6 +1047,49 @@ sub getClosest {
 	printf("Closest to %s is %d:%s (%d hexes)\n",$h->loc,$minind,$scr->pixel_to_hex($hlist[$minind])->hex_round()->loc,$mindis);
 	($minind < 0) && die "Wat! (shouldn't happen unless user passed empty array or something stupid like that)";
 	return $scr->pixel_to_hex($hlist[$minind])->hex_round();
+}
+
+sub drawHexAt {
+	my ($screen,$v,%exargs) = @_;
+	my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$screen->pixel_to_hex($v)->hex_round);
+	my $text = sprintf("%d,%d",$screen->pixel_to_axial($v,1));
+#printf("Drawing Hex At %d,%d => H(%s)\n",$v->x,$v->y,$text);
+	if ($exargs{autoloc}) {
+		$exargs{loc} = join(',',$v->loc);
+#	} else {
+#		print Common::lineNo();
+	}
+	MapDraw::formLayerObject(1,'polygon',[$points,],x => ($x or 0),y => ($y or 0), text => $text, coords => 1, fill => $fill, %exargs);
+	return 0;
+}
+
+
+sub drawPOI { # expects (Vertex,Hashref) or (int,int,Hashref)
+	# where hashref contains: (r)adius, (s)troke color, and/or (f)ill color
+	my ($x,$y,$z) = @_;
+	my %args = %{ ((ref($x) eq "Vertex" ? $y : $z ) or { r => 5 }) };
+	my %circle = ();
+	$circle{x} = (ref($x) eq "Vertex" ? $x->x : $x ) - 10;
+	$circle{y} = (ref($x) eq "Vertex" ? $x->y : $y ) - 10;
+#printf("Drawing Circle Around %d,%d\n",$circle{x},$circle{y});
+	foreach my $k (keys %args) {
+		if ($k eq 'r') {
+			$circle{$k} = $args{$k};
+		} elsif ($k eq 's') {
+			$circle{stroke} = $args{$k};
+		} elsif ($k eq 'f') {
+			$circle{fill} = $args{$k};
+		}
+	}
+	$circle{r} = 5 unless (defined $circle{r}); # default radius
+	MapDraw::formLayerObject(2,'circle',[\%circle,]);
+}
+
+sub trimDuplicates { # duplicate hexes
+	my ($array,%exargs) = @_;
+# TODO: make a new array, check each new entry for duplication
+
+	return @$array;
 }
 
 1;

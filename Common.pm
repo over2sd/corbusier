@@ -245,4 +245,29 @@ sub lineNo {
 	return qq{ at line $line of $sub in $file.\n };
 }
 
+sub getBit { # returns bool
+	my ($pos,$mask) = @_;
+	$pos = 2**$pos;
+	return ($mask & $pos) == $pos ? 1 : 0;
+}
+
+sub setBit { # returns mask
+	my ($pos,$mask) = @_;
+	$pos = 2**$pos;
+	return $mask | $pos;
+}
+
+sub unsetBit { # returns mask
+	my ($pos,$mask) = @_;
+	$pos = 2**$pos;
+	return $mask ^ $pos;
+}
+
+sub toggleBit { # returns mask
+	my ($pos,$mask) = @_;
+	$pos = 2**$pos;
+	$pos = $mask & $pos ? $pos : $pos * -1;
+	return $mask + $pos;
+}
+
 1;
