@@ -53,10 +53,10 @@ sub main {
     my $depth = 3; # how many substreets deep should we go?
     my $poi = 0; # use points of interest instead of branching
     my $max = 0; # maximum number of roads in total. If not set as an option, this will be equal to highways * secondaries.
-    my $seed = -1; # Random seed/map number
+    my $seed = 0; # -1; # Negative = random seed/map number
     my $w = 800; # Width of image
     my $h = 600; # Height of image
-    my $hex = 0; # generate a map for use with a hex grid
+    my $hex = 1; # generate a map for use with a hex grid
     my $grid = 32; # how big is the grid (diagonals/rows)
 	my $grid2 = 0;
 	my $shape = 'hexb'; # shape of hex grid
@@ -70,6 +70,7 @@ sub main {
 	my $crossroadssquare = 0; # secondaries and side roads meet larger roads at close to 90 degrees.
 	my $centertype = 0; # type of map to generate -=- default center mode
 	my ($map,$screen); # needed for hex maps.
+	my $joins = 4; # how many squares to build (used only by GUI);
 							$disp = 1; # for development. TODO: Remove this line when done tweaking generator
     GetOptions(
 		'help' => \$showhelp,
@@ -103,8 +104,13 @@ sub main {
     if (!$max) { $max = $hiw * $sec; }
     if ($gui) {
 # most other options are ignored, if gui will be shown.
-#        use MapGUI;
-        showGUI();
+        use MapGUI;
+        MapGUI::showGUI(
+			w => $w, h => $h, seed => $seed, joins => $joins,
+			hex => $hex, rows => $grid, cols => $grid2, shape => $shape,
+			hexorder => $order, radius => $scale, hexor => 'left',
+			exits => $hiw, sec => $sec, ratio => $rat, depth => $depth,
+			);
     } else {
 		my $svg = '';
 		Points::setCornerHeadings($w,$h); # set boundaries for use multiple times.

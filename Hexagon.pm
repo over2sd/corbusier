@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 package Hexagon;
+use Common qw( nround );
 
 sub placeHex {
 	my ($order,$x,$y,%profile) = @_;
@@ -55,6 +56,24 @@ sub toCube {
 	return @c;
 }
 
+sub roundAxial {
+	my ($q,$r,$s,$frac) = @_;
+#	(defined $s or $s = -$q-$r);
+	my $dq = abs(nround(0,$q) - $q);
+	my $dr = abs(nround(0,$r) - $r);
+	my $ds = abs(nround(0,$s) - $s);
+#print " round from $q,$r";
+	if ($dq > $dr and $dq > $ds) {
+		$q = -$r-$s;
+	} elsif($dr > $ds) {
+		$r = -$q-$s;
+	}
+#print " to $q,$r ";
+	($q,$r) = (nround(0,$q),nround(0,$r));
+	$s = -$q-$r; # since rounding $s may not yield a valid value, and we're mainly using Q,R
+	return ($q,$r,$s);
+}
+
 package Hexagon::Hex;
 use List::Util qw( max );
 
@@ -80,6 +99,11 @@ sub new {
 	return $self;
 }
 
+sub hex_round { # in case caller expected me to be a Fractional
+	warn $_[0]->name . " is not a Fractional";
+	return $_[0];
+}
+
 sub q {
 	return shift->{q};
 }
@@ -94,7 +118,7 @@ sub s {
 
 sub coords {
 	my ($self,$nos) = @_;
-	return ($nos ? sprintf("%i,%i",$self->q,$self->r) : sprintf("%i,%i,%i",$self->q,$self->r,$self->s));
+	return ($nos ? sprintf("%i,%i",int($self->q),int($self->r)) : sprintf("%i,%i,%i",$self->q,$self->r,$self->s));
 }
 
 sub loc { # alias
@@ -197,7 +221,7 @@ sub hex_linedraw {
 #		push(@results,Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_)));
 		my $h = Hexagon::Fractional::hex_round(hex_lerp($self,$h,$step * $_));
 		if (defined($extra{map}) and ref($extra{map}) eq "Hexagon::Map") {
-			$h->set_fill($extra{color}) if (defined($extra{color}));
+			$h->set_fill($extra{fill}) if (defined($extra{fill}));
 			$extra{map}->add_hex($h) unless $extra{map}->is_hex_at($h->intloc());
 #			$map->{grid}{$h->loc} = $h;
 		}
@@ -298,7 +322,7 @@ sub genborder {
 					($y == $a && $x >= $u-1 && $x < $w) && next;
 					($y == $z+1 && $x >= $u && $x <= $w) && next;
 					push(@border,[$x,$y]);
-					if (defined $args{store} and $args{store} = 1) {
+					if (defined $args{store} and $args{store} == 1) {
 						my $h = Hexagon::placeHex($self->{order},$x,$y,fill => "#69c");
 						${$self->{grid}}{$h->loc()} = $h;
 					}
@@ -433,21 +457,28 @@ sub height {
 sub neighbor_toward {
 	my ($self,$h,$direction,$extras) = @_;
 	my $text = (ref($h) eq "Hexagon::Hex" ? $h->loc : $h );
+# TODO: Use order to choose appropriate adders. Uses order=0 right now.
 #	$self->{order}
 	my @adders = ([1,-1],[1,0],[0,1],[-1,1],[-1,0],[0,-1]);
 # TODO: add adders to coords and return hex location in that direction
-	my ($x,$y,$z) = $h->intloc();
+	my ($x,$y) = $text =~ /(\d+), ?(\d+)/;
+#print " $x,$y";
 	$x += ${$adders[$direction]}[0];
 	$y += ${$adders[$direction]}[1];
+#print "  $text==$direction==>$x,$y  ";
 	return ($x,$y);
 }
 
 sub open_neighbors {
 	my ($self,$h) = @_;
-	my $mask = 31;
+	my $mask = 0;
 	foreach (0 .. 5) {
-		$mask = Common::toggleBit($_,$mask) if $self->is_hex_at($h,$_);
+		unless ($self->is_hex_at($self->neighbor_toward($h,$_))) {
+			$mask = Common::setBit($_,$mask) ;
+#			print "+" . 2**$_ . "=$mask ";
+		}
 	}
+#	print " ";
 	return $mask;
 }
 
@@ -568,35 +599,32 @@ sub hex_to_pixel {
 	my ($self,$h) = @_;
 	my $x = ($self->{orientation}->{f0} * $h->q + $self->{orientation}->{f1} * $h->r) * $self->sx;
 	my $y = ($self->{orientation}->{f2} * $h->q + $self->{orientation}->{f3} * $h->r) * $self->sy;
-printf(" +o %s,%s ",$self->xoff,$self->yoff) if $self->{debug};
-	return Vertex->new(undef,undef,$x + $self->xoff,$y + $self->yoff);
+	my $v = Vertex->new(undef,sprintf("Center of Hex %d,%d",$h->q,$h->r),$x + $self->xoff,$y + $self->yoff);
+#printf(" H%s,%s => p%.01f,%.01f ",$h->q,$h->r,$v->x,$v->y) if $self->{debug};
+	return $v;
 }
 
 sub pixel_to_hex {
-	my ($self,$v) = @_;
-	my ($q,$r) = $self->pixel_to_axial($v,0);
-	return Hexagon::Fractional->new($q,$r,-$q-$r);
+	my ($self,$v,$round) = @_;
+	my ($q,$r) = $self->pixel_to_axial($v,($round or 0));
+#printf(" fH%.2f,%.2f ",$q,$r);
+	my $qi = int($q);
+	my $ri = int($r);
+	my ($iq,$ir) = (("$q" eq "$qi" ? 1 : 0),("$r" eq "$ri" ? 1 : 0));
+#	print ($round ? "H" : "F $q/$qi,$r/$ri - $iq,$ir ");
+	return ($round ? Hexagon::Hex->new($q,$r,-$q-$r) : Hexagon::Fractional->new($q,$r,-$q-$r));
 }
 
 sub pixel_to_axial {
 	my ($self,$v,$round) = @_;
-print " -o " if $self->{debug};
 	my ($x,$y) = (($v->x - $self->xoff) / $self->sx,($v->y - $self->yoff) / $self->sy);
 	my $q = $self->{orientation}->{b0} * $x + $self->{orientation}->{b1} * $y;
 	my $r = $self->{orientation}->{b2} * $x + $self->{orientation}->{b3} * $y;
+#printf(" H%.01f,%.01f  <= p%.01f,%.01f ",$q,$r,$v->x,$v->y) if $self->{debug};
 	my $s = -$q-$r;
 	if ($round) {
-		my $dq = abs(int($q) - $q);
-		my $dr = abs(int($r) - $r);
-		my $ds = abs(int($s) - $s);
-		if ($dq > $dr and $dq > $ds) {
-			$q = -$r-$s;
-		} elsif($dr > $ds) {
-			$r = -$q-$s;
-#		} else {
-#			$s = -$q-$r;
-		}
-		return ($q,$r);
+#print "_";
+		($q,$r,$s) = Hexagon::roundAxial($q,$r,$s);
 	}
 	return ($q,$r);
 }
@@ -612,6 +640,7 @@ sub polygon_corners {
 	my ($self,$h) = @_;
 	my @corners;
 	my $c = $self->hex_to_pixel($h);
+#print $c->describe(1);
 	foreach (0..5) {
 		my $o = $self->corner_offset($_);
 		push(@corners,Vertex->new($_,$h->q . "," . $h->r,$c->x + $o->x, $c->y + $o->y));
@@ -634,16 +663,15 @@ sub hex_to_lines {
 }
 
 sub hexlist_to_lines {
-	my ($self,@hexes) = @_;
+	my ($self,$color,@hexes) = @_;
 	my @lines;
 	my $v1;
-	my @colors = ('#00f','#0f0','#f00','#0ff','#ff0','#33f','#3f3','#f33','#66f','#6f6','#f66','#99f','#9f9','#f99','#ccf','#cfc','#fcc');
 	my $i = 0;
 	foreach (@hexes) {
 		my $v2 = $self->hex_to_pixel($_); # offsets are built into this function already
 		if (defined $v1) {
-			my $s = Segment->new(0,sprintf("%s%d",$_->name,$i),$v1->x,$v2->x,$v1->y,$v2->y);
-			$s->setMeta(color => $colors[$i++ % @colors]);
+			my $s = Segment->new(0,sprintf("%s%d",$_->name,$i++),$v1->x,$v2->x,$v1->y,$v2->y);
+			$s->setMeta(color => $color);
 			push(@lines,$s);
 		}
 		$v1 = $v2;
@@ -682,20 +710,9 @@ sub new {
 }
 
 sub hex_round {
-	my ($self,$unused) = @_;
-	my $q = int($self->q);
-	my $r = int($self->r);
-	my $s = int($self->s);
-	my $dq = abs($q - $self->q);
-	my $dr = abs($r - $self->r);
-	my $ds = abs($s - $self->s);
-	if ($dq > $dr and $dq > $ds) {
-		$q = -$r-$s;
-	} elsif($dr > $ds) {
-		$r = -$q-$s;
-	} else {
-		$s = -$q-$r;
-	}
+	my ($self) = @_;
+	my ($q,$r,$s) = Hexagon::roundAxial($self->q,$self->r,$self->s,1);
+#print "*";
 	return Hexagon::Hex->new($q,$r,$s);
 }
 

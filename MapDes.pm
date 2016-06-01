@@ -35,7 +35,10 @@ sub genmap {
 	# possibly, even divide the map into rectangular districts and use different methods to form each district's map?
 	my ($numr,@rs) = branchmap($hiw,$sec,$rat,$max,$centertype,$squareintersections);
 
+	my $size = scalar @rs;
+	if (0) { print "Checking for duplicate routes..."; }
 	@rs = Points::seg_remove_dup(\@rs,0); # trim out duplicate segments to make drawing more efficient
+	if (0) { print "Removed " . ($size - scalar @rs) . " duplicate route" . ($size - scalar @rs == 1 ? "" : "s") . ".\n"; }
 	if ($debug) { print "<=branchmap returned $numr routes to genmap\n"; }
 	return $numr,@rs;
 }
@@ -335,7 +338,7 @@ sub branchmap {
 
 # centertype: 0 - central hub, 1 - starry ring (each point connects to one waypoint, which connects to the next central point), 2 - ring (each point connects to next point by azimuth), 3 - 2 or 3 central points, (good for river towns?)
 sub genSquares {
-	if ($debug > 1) { print "genSquares(@_)\n" };
+	if ($debug > 1) { $|++; print "genSquares(@_)\n" };
 	my ($qty,$centertype,$variance,$waypointsref,$wpqty,$unitref,$scale) = @_;
 	unless ($qty and defined $scale) { return (); }
 	my $width = $mdconfig{width};
@@ -463,7 +466,7 @@ sub connectSqs {
 				if ($i != $lowindex) {
 					my $line = linkNearest($$numroutes,$sqs[$i],sprintf("Road%d",$i),0.67,25,@sqs[0 .. $i-1]);
 					$line->setMeta('color',$exargs{color}) if (defined $exargs{color});
-					$line->immobilize();
+#					$line->immobilize();
 					push(@roads,$line);
 					$$numroutes++;
 				}
@@ -948,7 +951,7 @@ print "Received " . scalar @squares . " squares...";
 	my $color = MapDraw::incColor();
 	foreach (@exits) {
 		my $dest = getClosest($screen,$_,@squares);
-		my @steps = getRoute($screen,$_,$dest,map => $g,color => $color);
+		my @steps = getRoute($screen,$_,$dest,map => $g,color => $color, fill => MapDraw::incColor());
 		push(@erts,@steps);
 	}
 	push (@routes,@erts);
@@ -961,29 +964,33 @@ print "Received " . scalar @squares . " squares...";
 	# choose side roads
 	# look for places to add minor roads
 	# return or draw map
+	my $size = scalar @routes;
+	if (1) { print "Checking for duplicate routes..."; }
 	@routes = Points::seg_remove_dup(\@routes,0); # trim out duplicate segments to make drawing more efficient
+	if (1) { print "Removed " . ($size - scalar @routes) . " duplicate route" . ($size - scalar @routes == 1 ? "" : "s") . ".\n"; }
 	return $nr,@routes;
 }
 
 sub getRoute { # shorthand
 	my ($scr,$start,$end,%args) = @_;
-	return $scr->hexlist_to_lines($start->hex_linedraw($end,%args));
+	return $scr->hexlist_to_lines($args{color},$start->hex_linedraw($end,%args));
 }
 
 sub connectSqsHex {
 	my ($screen,$routes,$map,%args) = @_;
 	my @hexrts;
 	foreach my $h (@$routes) {
+		my $sv = Vertex->new(undef,"StartV",$h->ox,$h->oy);
+		my $ev = Vertex->new(undef,"EndV",$h->ex,$h->ey);
+print "\n" . $sv->describe(1);
+print "\n" . $ev->describe(1);
 printf("%d,%d - %d,%d\n",$h->ox,$h->oy,$h->ex,$h->ey);
-		my $sv = Vertex->new(undef,undef,$h->ox,$h->oy);
-		my $ev = Vertex->new(undef,undef,$h->ex,$h->ey);
-		my $sf = $screen->pixel_to_hex($sv);
-		my $ef = $screen->pixel_to_hex($ev);
-		my $sd = $sf->hex_round();
-		my $ed = $ef->hex_round();
+		my $sd = $screen->pixel_to_hex($sv);
+		my $ed = $screen->pixel_to_hex($ev);
+		$sd = $sd->hex_round();
+		$ed = $ed->hex_round();
+printf("%s - %s\n",$sd->loc,$ed->loc);
 		if (defined($map)) {
-#			$map->add_hex($ed) unless $map->is_hex_at($ed->intloc());
-#			$map->add_hex($sd) unless $map->is_hex_at($sd->intloc());
 			$args{map} = $map;
 			$args{color} = "#6cc" unless defined ($args{color});
 		}
@@ -1037,7 +1044,7 @@ sub getClosest {
 	my ($scr,$h,@hlist) = @_;
 	my @dists;
 	foreach (@hlist) {
-		push(@dists,$h->distance($scr->pixel_to_hex($_)->hex_round()));
+		push(@dists,$h->distance($scr->pixel_to_hex($_,1)));
 	}
 	my $minind = -1; # index of minimum
 	my $mindis = 9999999; # minimum distance
@@ -1046,14 +1053,20 @@ sub getClosest {
 	}
 	printf("Closest to %s is %d:%s (%d hexes)\n",$h->loc,$minind,$scr->pixel_to_hex($hlist[$minind])->hex_round()->loc,$mindis);
 	($minind < 0) && die "Wat! (shouldn't happen unless user passed empty array or something stupid like that)";
-	return $scr->pixel_to_hex($hlist[$minind])->hex_round();
+	return $scr->pixel_to_hex($hlist[$minind],1);
 }
 
 sub drawHexAt {
 	my ($screen,$v,%exargs) = @_;
-	my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$screen->pixel_to_hex($v)->hex_round);
-	my $text = sprintf("%d,%d",$screen->pixel_to_axial($v,1));
-#printf("Drawing Hex At %d,%d => H(%s)\n",$v->x,$v->y,$text);
+	return drawThisHex($screen,$screen->pixel_to_hex($v)->hex_round,%exargs);
+}
+
+sub drawThisHex {
+	my ($screen,$h,%exargs) = @_;
+	my ($points,$x,$y,$fill) = MapDraw::pointify($screen,$h);
+	my $v = $screen->hex_to_pixel($h);
+	my $text = sprintf("%d,%d",$h->intloc());
+printf("Drawing Hex At %d,%d => H(%s)\n",$v->x,$v->y,$text);
 	if ($exargs{autoloc}) {
 		$exargs{loc} = join(',',$v->loc);
 #	} else {
@@ -1063,14 +1076,19 @@ sub drawHexAt {
 	return 0;
 }
 
+sub drawHexPOI {
+	my ($screen,$h,$z) = @_;
+	my $v = $screen->hex_to_pixel($h);
+	return drawPOI($v,$z)
+}
 
 sub drawPOI { # expects (Vertex,Hashref) or (int,int,Hashref)
 	# where hashref contains: (r)adius, (s)troke color, and/or (f)ill color
 	my ($x,$y,$z) = @_;
 	my %args = %{ ((ref($x) eq "Vertex" ? $y : $z ) or { r => 5 }) };
 	my %circle = ();
-	$circle{x} = (ref($x) eq "Vertex" ? $x->x : $x ) - 10;
-	$circle{y} = (ref($x) eq "Vertex" ? $x->y : $y ) - 10;
+	$circle{x} = (ref($x) eq "Vertex" ? $x->x : $x );
+	$circle{y} = (ref($x) eq "Vertex" ? $x->y : $y );
 #printf("Drawing Circle Around %d,%d\n",$circle{x},$circle{y});
 	foreach my $k (keys %args) {
 		if ($k eq 'r') {
@@ -1090,6 +1108,112 @@ sub trimDuplicates { # duplicate hexes
 # TODO: make a new array, check each new entry for duplication
 
 	return @$array;
+}
+
+sub open_neighbors_with_count {
+	my ($g,$h) = @_;
+	my $mask = $g->open_neighbors($h);
+	my @nei = Common::expandMask($mask);
+	my $count = scalar @nei;
+	return ($mask,$count,@nei);
+}
+
+sub branchInnerHex {
+	my ($secondratio,$screen,$grid,@bigroads) = @_;
+	my $color = "#808099";
+	my @sides;
+	foreach my $k (keys %{ $grid->{grid} }) {
+		my $h = $grid->{grid}{$k};
+		my ($mask,$count,@nei) = open_neighbors_with_count($grid,$h);
+		$count < 2 && next; # no sideroad if only one open hex
+		my $choice = int(rand(12))%$#nei;
+		my @nl = $grid->neighbor_toward($h,$nei[$choice]);
+		my $n = $grid->add_hex_at(@nl,name => sprintf("%d,%d",@nl), fill => $color);
+		my ($maskn,$countn,@nein) = open_neighbors_with_count($grid,$n);
+		my $sn;
+print "\n:::" . $h->loc . ": ";
+		if ($countn) {
+			my @snl = $grid->neighbor_toward($n,$nei[$choice]);
+			$sn = $grid->add_hex_at(@snl,name => sprintf("%d,%d",@snl), fill => $color);
+print "[" . $n->loc . "}{" . $sn->loc . "]";
+			push(@sides,$screen->hexlist_to_lines($color,$sn,$n,$h));
+		} else {
+			my @snl = $grid->neighbor_toward($h,$nei[$choice + 1 + int(rand($count - 1))]);
+			$sn = $grid->add_hex_at(@snl,name => sprintf("%d,%d",@snl), fill => $color);
+print $n->loc . " () " . $sn->loc;
+			push(@sides,$screen->hexlist_to_lines($color,$sn,$h,$n));
+		}
+	}
+print "===\n";
+	return @sides;
+}
+
+sub branchOuterHex {
+	if ($debug) { print "branchInnerHex(@_);"; }
+	my ($secondratio,$bearvar,$factor,$scale,@bigroads) = @_;
+	my @smallroads;
+	my $sidestomake = $secondratio;
+	my $posrange = 1/($sidestomake + 2);
+	my @positions;
+	my $variance = $posrange / 5 + 0.01;
+	foreach my $i (0 .. $sidestomake) {
+		push(@positions,($posrange * ($i + 1)) - $variance + (rand($variance * 2)));
+	}
+	my $sidesperroad = (int($sidestomake / @bigroads) or 1);
+	my $sidesmade = 0;
+	my $brnum = 0;
+	foreach my $r (@bigroads) {
+		foreach (0 .. $sidesperroad) {
+			next if ($sidesmade >= $sidestomake);
+			my $id = scalar(@bigroads)+scalar(@smallroads);
+			my $bear = $r->azimuth();
+			my $sideroad = Segment->new($id,sprintf("%.2f Road %d",$bear,$id));
+#		choose a point on highway
+			my $intersection = Points::findOnLine($r->ex(),$r->ey(),$r->ox(),$r->oy(),Common::fmod($positions[$sidesmade] * scalar @bigroads,1.0));
+#		choose a distance for the road to extend
+			my $len = int($factor * $scale * (rand(1) + 1.2));
+			addSideHereAlt($intersection,$sideroad,$len,$bearvar,$bear,75); # 100=chance of doubling?
+#		(check for bad juxtapositions?)
+			adjustSideRoad($sideroad,20,@smallroads);
+#		add road to route list
+			push(@smallroads,$sideroad);
+			$sidesmade++;
+		}
+		$brnum++;
+	}
+	return @smallroads;
+}
+
+sub addSideHereAlt {
+	my ($intersection,$road,$length,$variance,$bear,$doublechance) = @_;
+#		choose a bearing coming off the highway
+	my @azchoice = (90 - $variance,90,90 + $variance,270 - $variance,270,270 + $variance);
+	my $az = $azchoice[rand(7) % scalar @azchoice];
+	my $endpoint = Points::choosePointAtDist($intersection->x(),$intersection->y(),$length,$az - 3,$az + 3,$bear);
+#		Make sure the road doesn't go off the map
+	my $w = $mdconfig{width};
+	my $h = $mdconfig{height};
+	$endpoint->clip(0,0,$w,$h);
+#		Draw a line between the point and the line
+	$road->set_ends(int($endpoint->x()),int($intersection->x()),int($endpoint->y()),int($intersection->y()));
+#		Extend the road an equal distance past the intersection some percentage of the time
+	my $roaddoubling = 0;
+	my $secondroad = undef;
+	if ($doublechance >= 100 or rand(100) < $doublechance) {
+		my $a = $road->azimuth() - $bear;
+		if ($a < 180 and $a > 135) {
+			$roaddoubling = 2;
+		} elsif ($a < 360 and $a > 315) {
+			$roaddoubling = 3;
+		} else {
+			$roaddoubling = 1;
+			my $w = $mdconfig{width};
+			my $h = $mdconfig{height};
+			$road->double($w,$h);
+		}
+		$road->roundLoc(0);
+	}
+	return $secondroad;
 }
 
 1;

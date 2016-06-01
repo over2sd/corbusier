@@ -111,7 +111,7 @@ sub describe {
     unless (defined $vv) { $vv = 0 };
     if ($vv == 0) { return $self->x(),$self->y(),$self->z(); } # 0
 	my $class = $self->Iama();
-    my $bio = "I am " . $self->name() . ", a" . ( $self->can_move() ? " " : "n im") . "movable $class at (" . $self->x() . "," . $self->y() . ($showz ? "," . $self->z() : "" ) . ")."; # 1
+    my $bio = sprintf("I am %s, a%smovable $class at (%.2f,%.2f%s).",$self->name(),( $self->can_move() ? " " : "n im"),$self->x(),$self->y(),($showz ? sprintf(",%.2f",$self->z()) : "" )); # 1
     return $bio;
 }
 

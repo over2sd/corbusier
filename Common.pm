@@ -270,4 +270,23 @@ sub toggleBit { # returns mask
 	return $mask + $pos;
 }
 
+sub expandMask { # returns array
+	my ($mask,$size) = @_;
+	defined($size) || ($size = 8);
+	my @bitlist = (0 .. $size-1);
+	my @bits;
+	foreach my $b (@bitlist) {
+		push(@bits,$b) if getBit($b,$mask);
+	}
+	return @bits;
+}
+
+sub fmod { # useful for working with fractional values, since x%y may return int.
+	my ($x,$y,$both) = @_;
+	die "Divide by zero!" unless $y;
+	my $q = floor($x/$y);
+	my $r = $x - ($y*$q);
+	return ($both ? ($r,$q) : $r); # mostly, we'll just want the remainder
+}
+
 1;

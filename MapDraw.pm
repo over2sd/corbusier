@@ -126,7 +126,7 @@ sub pointify {
 		$points = sprintf("%s%d,%d ",$points,$v->x + $offx,$v->y + $offy);
 	}
 	# text location, near point 3 of the hex:
-	my ($x,$y) = (($pointlist[2]->x or 0) + $offx + 3,($pointlist[2]->y or 0) + $offy - 4);
+	my ($x,$y) = (int(($pointlist[2]->x or 0) + $offx + 3.5),int(($pointlist[2]->y or 0) + $offy - 3.5));
 $screen->{debug} = 0;
 	return ($points,$x,$y,$fill);
 }
