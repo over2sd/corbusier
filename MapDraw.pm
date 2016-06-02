@@ -10,6 +10,14 @@ sub getColor {
     return sprintf("#%02x%02x%02x",$color{'r'}, $color{'g'}, $color{'b'});
 }
 
+sub setColor {
+	my ($r,$g,$b) = @_;
+	$color{'r'} = $r;
+	$color{'g'} = $g;
+	$color{'b'} = $b;
+	print "Color is set to " . getColor() . "\n";
+}
+
 sub incColor {
     my $curcol = getColor();
     $color{'b'} += 51;

@@ -973,6 +973,12 @@ print "Received " . scalar @squares . " squares...";
 
 sub getRoute { # shorthand
 	my ($scr,$start,$end,%args) = @_;
+	unless (defined($start) && ref($start) =~ m/Hex/) {
+		die "No starting hex for getRoute!";
+	}
+	unless (defined($end) && ref($end) =~ m/Hex/) {
+		die "No ending hex for getRoute!";
+	}
 	return $scr->hexlist_to_lines($args{color},$start->hex_linedraw($end,%args));
 }
 

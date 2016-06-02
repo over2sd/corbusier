@@ -83,10 +83,12 @@ sub new {
 	(defined $q and defined $r) || die "Hexagon::Hex must be created with at least two coordinates!\n";
 	(defined $s) || ($s = -$r-$q);
 	# assert coords sum as 0:
-	unless ($q + $r + $s == 0) {
-		my $position = Common::lineNo();
-		die "Hexagon::Hex was given incorrect coordinates $q,$r,$s$position\n";
-	}
+	# This is more trouble than it is worth, and will make 3-D maps more complicated.
+#	unless ($q + $r + $s == 0) {
+#		my $position = Common::lineNo();
+#		my $t = $q + $r + $s;
+#		die "Hexagon::Hex was given incorrect coordinates $q,$r,$s (totaling $t)$position\n";
+#	}
 	my $self = { # we've already made sure each of these values is defined.
 		q => $q,
 		r => $r,
@@ -153,14 +155,15 @@ sub subtract { # takes a coordionate trio or another Hex object
 	defined $q or $q = 0;
 	defined $r or $r = 0;
 	defined $s or $s = 0;
-	(ref($q) =~ /Fractional/) && return undef; # avoid arithmetic with fractional hexes
+	if (ref($q) =~ /Fractional/) { warn "Can't subtract Fractionals!\n"; return undef; } # avoid arithmetic with fractional hexes
 	if (ref($q) =~ /Hex/) {
 		return Hexagon::Hex->new($self->q - $q->q,$self->r - $q->r, $self->s - $q->s);
 	} else {
 		($q | $r | $s) || return undef; # return undef if no values given
 		unless ($q + $r + $s == 0) {
 			my $position = Common::lineNo();
-			die "Hexagon::Hex was given incorrect coordinates $q,$r,$s$position\n";
+			my $t = $q + $r + $s;
+			die "Hexagon::Hex was given incorrect coordinates $q,$r,$s (total $t)$position\n";
 		}
 		return Hexagon::Hex->new($self->q - $q,$self->r - $r, $self->s - $s);
 	}
@@ -174,11 +177,16 @@ sub multiply { # takes a multiple
 
 sub hex_length { # converts a difference Hex to a distance in Hexes
 	my $self = shift;
+	unless (defined($self) and ref($self) =~ m/Hex/) {
+		warn "hex_length not given a distance Hex!\n";
+		return -1;
+	}
 	return int((abs($self->q) + abs($self->r) + abs($self->s))/2);
 }
 
 sub distance { # in hex steps; inherits subtract's flexibility
 	my ($self,$other,$r,$s) = @_;
+	$other = $other->hex_round() if (ref($other) =~ m/Fractional/);
 	return hex_length($self->subtract($other,$r,$s));
 }
 

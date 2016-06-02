@@ -8,3 +8,5 @@ Add a function that will generate the central squares, since what I have now doe
 twist() should have a switch allowing it to store each segment's parent and children, so that operations dealing with the whole route can collect them together.
 Segment should not store endpoints but reference vertices, so moving one Vertex will move all lines ending on it
 generating squares should use point by azimuth, divide circle into joins sections, then add azimuth rand(0,360/joins+1)
+FIX: when orientation is 'top', hexb's offsets are wrong.
+Completely rewrite the screen pixel<->hex functions so they give consistent results
