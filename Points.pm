@@ -22,7 +22,7 @@ Takes these options, all optional:
     identity - numeric ID
     name - human-friendly name
     x,y,z - integer coordinates
-    
+    meta - a hash of metadata for the particular type of point
 
 =cut
 
@@ -43,17 +43,35 @@ sub new {
 	return $self;
 }
 
+=item C<id>
+
+Returns the Vertex's numeric ID, and sets it, if an argument is provided.
+
+=cut
+
 sub id {
 	my ($self,$value) = @_;
 	$self->{identity} = $value if defined($value);
 	return $self->{identity};
 }
 
+=item C<name>
+
+Returns the Vertex's print-friendly name, and sets it, if an argument is provided.
+
+=cut
+
 sub name {
 	my ($self,$value) = @_;
 	$self->{moniker} = $value if defined($value);
 	return $self->{moniker};
 }
+
+=item C<x, y, z>
+
+Returns the Vertex's X, Y, or Z coordinate, and sets it, if an argument is provided and the Vertex is not immobilized.
+
+=cut
 
 sub x {
 	my ($self,$value) = @_;
@@ -66,6 +84,13 @@ sub y {
 	$self->{origin_y} = $value if (defined($value) and not $self->{immobile});
 	return $self->{origin_y};
 }
+
+=item C<loc>
+
+Returns the Vertex's location as an array of X, Y, and optionally Z coordinates.
+Takes an argument determining if the Z coordinate is included.
+
+=cut
 
 sub loc {
 	my ($self,$use_z) = @_;
@@ -80,6 +105,14 @@ sub z {
 	return $self->{origin_z};
 }
 
+=item C<move>
+
+Returns 0 if the Vertex is moved, or 1 if a required parameter is missing, or 86 if the point is immobile.
+Takes arguments for X, Y, and optionally Z coordinates.
+Sets the position of the Vertex.
+
+=cut
+
 sub move {
 	my ($self,$x,$y,$z) = @_;
     if ($self->{immobile}) {
@@ -93,21 +126,54 @@ sub move {
     return 0;
 }
 
+=item C<wobble>
+
+Returns 0 if the Vertex is moved, or 86 if the point is immobile, or -1 if no variance value is given.
+Takes a required parameter for the amount of variance.
+Varies the X, Y, and Z values of the Vertex.
+
+=cut
+
 sub wobble {
 	use Common qw( vary );
 	my ($self,$variance) = @_;
+    if ($self->{immobile}) {
+        warn "Trying to move immobile vertex $self";
+        return 86;
+    }
+	unless (defined $variance) {
+		warn "Variance omittted";
+		return -1;
+	}
 	$self->{origin_x} = Common::vary($self->{origin_x},$variance);
 	$self->{origin_y} = Common::vary($self->{origin_y},$variance);
 	unless ($self->{origin_z} == 0) { $self->{origin_z} = Common::vary($self->{origin_z},$variance); }
 	return 0;
 }
 
+=item C<roundLoc>
+
+Returns nothing.
+Takes a required parameter for the precision in places.
+Moves the X and Y values of the Vertex to the nearest point of the required precision.
+
+=cut
+
 sub roundLoc {
 	my ($self,$prec) = @_;
+	defined $prec || return;
 	use Common qw( nround );
 	$self->move(nround($prec,$self->{origin_x}),nround($prec,$self->{origin_y}));
 	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n"; }
 }
+
+=item C<can_move>
+
+Returns 0 if the Vertex is immobile, or 1 if the point is mobile.
+Takes an optional parameter to set the Vertex's mobility.
+Makes the Vertex mobile or immobile if the value parameter is set.
+
+=cut
 
 sub can_move {
 	my ($self,$value) = @_;
@@ -118,16 +184,39 @@ sub can_move {
 	return 1;
 }
 
+=item C<immobilize>
+
+Returns 0.
+Takes no parameters.
+Makes the Vertex immobile.
+
+=cut
+
 sub immobilize {
 	my $self = shift;
 	$self->{immobile} = 1;
 	return 0;
 }
 
+=item C<Iama>
+
+Returns the object's class (Vertex).
+Takes no parameters.
+
+=cut
+
 sub Iama {
 	my $self = shift;
 	return $self->{class};
 }
+
+=item C<describe>
+
+Returns 
+Takes an optional parameter
+Makes no changes.
+
+=cut
 
 sub describe {
     my ($self,$vv,$showz) = @_;
