@@ -3,6 +3,29 @@ use strict;
 ############################ Vertex (point) Library ############################
 package Vertex;
 
+=head2 NAME
+
+Vertex - a package for handling vertices.
+
+=head2 USAGE
+
+    use Points;
+    my $vert = Vertex->new(42,"uplt",3,5,0,(interest=>"depot"));
+
+=head3 Methods
+
+=item C<new>
+
+Returns a new Vertex object.
+Takes these options, all optional:
+    class (if not using Vertex->new)
+    identity - numeric ID
+    name - human-friendly name
+    x,y,z - integer coordinates
+    
+
+=cut
+
 sub new {
 	my ($class,$i,$n,$x1,$y1,$z1,%meta) = @_;
 #print "Creating a vertex ($i,$n) at ($x1,$y1)...\n";
