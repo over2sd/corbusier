@@ -212,8 +212,8 @@ sub Iama {
 
 =item C<describe>
 
-Returns 
-Takes an optional parameter
+Returns the string describing the object.
+Takes an optional parameter for verbosity and one for showing th Z coordinat.
 Makes no changes.
 
 =cut
@@ -227,23 +227,48 @@ sub describe {
     return $bio;
 }
 
+=item C<clip>
+
+Returns 0 if the Vertex is moved or within the boundaries, or 1 if a required parameter is missing, or 86 if the point is immobile.
+Takes required parameters for minimum X and Y, and maximum X and Y.
+Makes changes to the point to bring it within the minimum and maximum values.
+
+=cut
+
 sub clip {
 	my ($self,$minx,$miny,$maxx,$maxy) = @_;
+	return 1 unless (defined $minx and defined $maxx and defined $miny and defined $maxy);
 	my $x = $self->{origin_x};
 	my $y = $self->{origin_y};
 	$x = ($x > $maxx ? $maxx : ($x < $minx ? $minx : $x));
 	$y = ($y > $maxy ? $maxy : ($y < $miny ? $miny : $y));
-	$self->move($x,$y);
+	return $self->move($x,$y); # 86 and 0 are handled here.
 }
+
+=item C<getMeta>
+
+Returns key value, if present, or undef if not defined.
+Takes required parameter key.
+Makes no changes.
+
+=cut
 
 sub getMeta {
 	my ($self,$key) = @_;
 	return $self->{metadata}{$key};
 }
 
+=item C<setMeta>
+
+Returns 0 for successful set, 1 for failure, -1 for missing value or key.
+Takes required parameters key and value.
+Makes changes: sets key to value given.
+
+=cut
+
 sub setMeta {
 	my ($self,$key,$value) = @_;
-	unless (defined $value) { return -1; }
+	unless (defined $value and defined $key) { return -1; }
 #	print "Setting metadata $key to $value.\n";
 	($self->{metadata}{$key} = $value) or return 1;
 	return 0;
