@@ -12,17 +12,19 @@ Vertex - a package for handling vertices.
     use Points;
     my $vert = Vertex->new(42,"uplt",3,5,0,(interest=>"depot"));
 
-=head3 Methods
+=head2 METHODS
 
-=item C<new>
+=over
 
-Returns a new Vertex object.
-Takes these options, all optional:
-    class (if not using Vertex->new)
-    identity - numeric ID
-    name - human-friendly name
-    x,y,z - integer coordinates
-    meta - a hash of metadata for the particular type of point
+=item new(class,identity,name,x,y,z,meta)
+
+	Returns a new Vertex object.
+	Takes these options, all optional:
+		class (if not using Vertex->new)
+		identity - numeric ID
+		name - human-friendly name
+		x,y,z - integer coordinates
+		meta - a hash of metadata for the particular type of point
 
 =cut
 
@@ -43,9 +45,9 @@ sub new {
 	return $self;
 }
 
-=item C<id>
+=item id(value)
 
-Returns the Vertex's numeric ID, and sets it, if an argument is provided.
+	Returns the Vertex's numeric ID, and sets it, if an argument is provided.
 
 =cut
 
@@ -55,9 +57,9 @@ sub id {
 	return $self->{identity};
 }
 
-=item C<name>
+=item name(value)
 
-Returns the Vertex's print-friendly name, and sets it, if an argument is provided.
+	Returns the Vertex's print-friendly name, and sets it, if an argument is provided.
 
 =cut
 
@@ -67,9 +69,9 @@ sub name {
 	return $self->{moniker};
 }
 
-=item C<x, y, z>
+=item x(value), y(value), z(value)
 
-Returns the Vertex's X, Y, or Z coordinate, and sets it, if an argument is provided and the Vertex is not immobilized.
+	Returns the Vertex's X, Y, or Z coordinate, and sets it, if an argument is provided and the Vertex is not immobilized.
 
 =cut
 
@@ -85,10 +87,10 @@ sub y {
 	return $self->{origin_y};
 }
 
-=item C<loc>
+=item loc(showZ)
 
-Returns the Vertex's location as an array of X, Y, and optionally Z coordinates.
-Takes an argument determining if the Z coordinate is included.
+	Takes an argument determining if the Z coordinate is included.
+	Returns the Vertex's location as an array of X, Y, and optionally Z coordinates.
 
 =cut
 
@@ -105,11 +107,11 @@ sub z {
 	return $self->{origin_z};
 }
 
-=item C<move>
+=item move({X},{Y},Z)
 
-Returns 0 if the Vertex is moved, or 1 if a required parameter is missing, or 86 if the point is immobile.
-Takes arguments for X, Y, and optionally Z coordinates.
-Sets the position of the Vertex.
+	Takes arguments for X, Y, and optionally Z coordinates.
+	Sets the position of the Vertex.
+	Returns 0 if the Vertex is moved, or 1 if a required parameter is missing, or 86 if the point is immobile.
 
 =cut
 
@@ -126,11 +128,11 @@ sub move {
     return 0;
 }
 
-=item C<wobble>
+=item wobble({variance})
 
-Returns 0 if the Vertex is moved, or 86 if the point is immobile, or -1 if no variance value is given.
-Takes a required parameter for the amount of variance.
-Varies the X, Y, and Z values of the Vertex.
+	Takes a required parameter for the amount of variance.
+	Varies the X, Y, and Z values of the Vertex.
+	Returns 0 if the Vertex is moved, or 86 if the point is immobile, or -1 if no variance value is given.
 
 =cut
 
@@ -151,11 +153,11 @@ sub wobble {
 	return 0;
 }
 
-=item C<roundLoc>
+=item roundLoc({precision})
 
-Returns nothing.
-Takes a required parameter for the precision in places.
-Moves the X and Y values of the Vertex to the nearest point of the required precision.
+	Takes a required parameter for the precision in places.
+	Moves the X and Y values of the Vertex to the nearest point of the required precision.
+	Returns move result.
 
 =cut
 
@@ -163,15 +165,15 @@ sub roundLoc {
 	my ($self,$prec) = @_;
 	defined $prec || return;
 	use Common qw( nround );
-	$self->move(nround($prec,$self->{origin_x}),nround($prec,$self->{origin_y}));
+	return $self->move(nround($prec,$self->{origin_x}),nround($prec,$self->{origin_y}));
 	if (0) { print "Moved to (" . $self->{origin_x} . "," . $self->{origin_y} . ").\n"; }
 }
 
-=item C<can_move>
+=item can_move(value)
 
-Returns 0 if the Vertex is immobile, or 1 if the point is mobile.
-Takes an optional parameter to set the Vertex's mobility.
-Makes the Vertex mobile or immobile if the value parameter is set.
+	Takes an optional parameter to set the Vertex's mobility.
+	Makes the Vertex mobile or immobile if the value parameter is set.
+	Returns 0 if the Vertex is immobile, or 1 if the point is mobile.
 
 =cut
 
@@ -184,11 +186,11 @@ sub can_move {
 	return 1;
 }
 
-=item C<immobilize>
+=item immobilize()
 
-Returns 0.
-Takes no parameters.
-Makes the Vertex immobile.
+	Takes no parameters.
+	Makes the Vertex immobile.
+	Returns 0.
 
 =cut
 
@@ -198,10 +200,10 @@ sub immobilize {
 	return 0;
 }
 
-=item C<Iama>
+=item Iama()
 
-Returns the object's class (Vertex).
-Takes no parameters.
+	Takes no parameters.
+	Returns the object's class (Vertex).
 
 =cut
 
@@ -210,11 +212,11 @@ sub Iama {
 	return $self->{class};
 }
 
-=item C<describe>
+=item describe(verbose,showZ)
 
-Returns the string describing the object.
-Takes an optional parameter for verbosity and one for showing th Z coordinat.
-Makes no changes.
+	Takes an optional parameter for verbosity and one for showing th Z coordinat.
+	Makes no changes.
+	Returns the string describing the object.
 
 =cut
 
@@ -227,11 +229,11 @@ sub describe {
     return $bio;
 }
 
-=item C<clip>
+=item clip({minX,minY,maxX,maxY})
 
-Returns 0 if the Vertex is moved or within the boundaries, or 1 if a required parameter is missing, or 86 if the point is immobile.
-Takes required parameters for minimum X and Y, and maximum X and Y.
-Makes changes to the point to bring it within the minimum and maximum values.
+	Takes required parameters for minimum X and Y, and maximum X and Y.
+	Makes changes to the point to bring it within the minimum and maximum values.
+	Returns 0 if the Vertex is moved or within the boundaries, or 1 if a required parameter is missing, or 86 if the point is immobile.
 
 =cut
 
@@ -245,11 +247,11 @@ sub clip {
 	return $self->move($x,$y); # 86 and 0 are handled here.
 }
 
-=item C<getMeta>
+=item getMeta({key})
 
-Returns key value, if present, or undef if not defined.
-Takes required parameter key.
-Makes no changes.
+	Takes required parameter key.
+	Makes no changes.
+	Returns key value, if present, or undef if not defined.
 
 =cut
 
@@ -258,11 +260,13 @@ sub getMeta {
 	return $self->{metadata}{$key};
 }
 
-=item C<setMeta>
+=item setMeta({key,value})
 
-Returns 0 for successful set, 1 for failure, -1 for missing value or key.
-Takes required parameters key and value.
-Makes changes: sets key to value given.
+	Takes required parameters key and value.
+	Makes changes: sets key to value given.
+	Returns 0 for successful set, 1 for failure, -1 for missing value or key.
+
+=back
 
 =cut
 
@@ -279,6 +283,30 @@ package Segment;
 
 use Common qw ( between );
 
+=head2 NAME
+
+Segment - a package for handling lines (line segments).
+
+=head2 USAGE
+
+    use Points;
+    my $line = Segment->new(42,"road",3,5,7,9,0,0,(cost=>35,speed=>40));
+
+=head2 METHODS
+
+=over
+
+=item new(ID,NAME,Xo,Xe,Yo,Ye,Zo,Ze,(META HASH))
+
+	Takes the following arguments, all optional:
+		ID - numeric identifier
+		NAME - friendly name
+		Origin X, End X, Origin Y, End Y, Origin Z, End Z - coordinates for the line's position
+		META - Metadata in hash form
+	Returns a Segment object
+
+=cut
+
 sub new {
 	my ($class,$i,$n,$x1,$x2,$y1,$y2,$z1,$z2,%meta) = @_; # needs ID;
 	my $self = {
@@ -287,9 +315,9 @@ sub new {
         origin_x => ($x1 or 0),
         origin_y => ($y1 or 0),
         origin_z => ($z1 or 0),
-        distance_x => 0,
-        distance_y => 0,
-        distance_z => 0,
+        distance_x => ($x2-$x1 or 0),
+        distance_y => ($y2-$y1 or 0),
+        distance_z => ($z2-$z1 or 0),
 		metadata => (%meta or {}),
         immobile => 0
 	};
@@ -297,6 +325,13 @@ sub new {
     $self->move_endpoint($x2,$y2,$z2);
 	return $self;
 }
+=item id(VALUE)
+
+	Takes an optional value.
+	Sets Segment's numeric ID, if provided with a value.
+	Returns the Segment's numeric ID.
+
+=cut
 
 sub id {
 	my ($self,$value) = @_;
@@ -304,11 +339,27 @@ sub id {
 	return $self->{identity};
 }
 
+=item name(VALUE)
+
+	Takes an optional value.
+	Sets Segment's friendly name, if provided with a value.
+	Returns the Segment's friendly name.
+
+=cut
+
 sub name {
 	my ($self,$value) = @_;
 	$self->{moniker} = $value if defined($value);
 	return $self->{moniker};
 }
+
+=item slope()
+
+	Takes no arguments
+	Calculates the Segment's slope.
+	Returns the Segment's slope.
+
+=cut
 
 sub slope {
     my $self = shift;
@@ -317,8 +368,15 @@ sub slope {
     return $self->{distance_y} / $self->{distance_x};
 }
 
+
+
 =item y_intercept()
-	NB: This function returns the theoretical y-intercept of the segment even if it does not actually cross the y axis.
+
+	Takes no arguments.
+	Calculates the Segment's Y-intercept.
+		NB: This function returns the theoretical y-intercept of the segment even if it does not actually cross the y axis.
+	Returns the point where the line does or would cross the Y axis.
+
 =cut
 
 sub y_intercept {
@@ -330,8 +388,20 @@ sub y_intercept {
     return $b;
 }
 
+=item f({x})
+
+	Takes a required argument X.
+	Calculates that X's Y-coordinate on the given line, even if it doesn't exist on this segment (useful for extending the line).
+	Returns the corresponding Y value.
+
+=cut
+
 sub f { # f(x)
 	my ($self,$x) = @_;
+	unless (defined $x) {
+		warn "No X value given";
+		return undef;
+	}
     my $m = $self->slope();
     if (not defined $m) { return undef; } # undefined slope == vertical line. Any y value will do.
 	elsif ($m == 0) { return $self->{origin_y}; } # horizontal line. Y is constant.
@@ -340,8 +410,20 @@ sub f { # f(x)
 	return $y;
 }
 
+=item finv({y})
+
+	Takes a required argument Y.
+	Calculates that Y's X-coordinate on the given line, even if it doesn't exist in this segment of the line.
+	Returns the corresponding X value.
+
+=cut
+
 sub finv { # f-1(y)
 	my ($self,$y) = @_;
+	unless (defined $y) {
+		warn "No Y value given";
+		return undef;
+	}
     my $m = $self->slope();
     if (not defined $m) { return $self->{origin_x}; } # undefined slope == vertical line. X is constant.
 	elsif ($m == 0) { return undef; } # horizontal line. Any Y will do.
@@ -349,6 +431,14 @@ sub finv { # f-1(y)
 	my $x = ($y - $b)/$m;
 	return $x;
 }
+
+=item ox(value), oy(value), oz(value)
+
+	Take an optional argument for a new origin value.
+	Change the origin value for X, Y, or Z, depending on method chosen, if a value is given.
+	Return the (new) origin value.
+
+=cut
 
 sub ox {
 	my ($self,$value) = @_;
@@ -368,6 +458,14 @@ sub oz {
 	return $self->{origin_z};
 }
 
+=item xl(length), yl(length), zl(length)
+
+	Take an optional argument for a new length.
+	Change the length value for X, Y, or Z, depending on method chosen, if a value is given.
+	Return the (new) length along the given axis.
+
+=cut
+
 sub xl {
 	my ($self,$value) = @_;
 	$self->{distance_x} = $value if (defined($value) and not $self->{immobile});
@@ -386,6 +484,14 @@ sub zl {
 	return $self->{distance_z};
 }
 
+=item ex(), ey(), ez()
+
+	Take no arguments.
+	Does nothing.
+	Return the endpoint value.
+
+=cut
+
 sub ex {
     my $self = shift;
     return $self->{origin_x} + $self->{distance_x};
@@ -401,10 +507,26 @@ sub ez {
     return $self->{origin_z} + $self->{distance_z};
 }
 
+=item azimuth(whole)
+
+	Takes an optional argument to return a whole number as opposed to a precise number.
+	Uses getAzimuth to calculate the Segment's azimuth.
+	Returns the Segment's azimuth (rotation in degrees from north or the top of the screen).
+
+=cut
+
 sub azimuth {
 	my ($self,$whole) = @_;
 	return Points::getAzimuth($self->ex(),$self->ey(),$self->ox(),$self->oy(),$whole);
 }
+
+=item move({x,y},z)
+
+	Takes required arguments for new X and Y coordinates, and an optional argument for a Z coordinate.
+	Moves the line's origin, if not immobilized, to the given location.
+	Returns 0 if the line's new location matches the given location, 86 if the line could not be moved, or 1 if one of the required arguments is missing.
+
+=cut
 
 sub move {
 	my ($self,$x,$y,$z) = @_;
@@ -419,6 +541,14 @@ sub move {
     return 0;
 }
 
+=item move_endpoint({x,y},z)
+
+	Takes required arguments for new X and Y coordinates, and an optional argument for a Z coordinate.
+	Moves the line's endpoint, if not immobilized, to the given location.
+	Returns 0 if the line's new endpoint matches the given location, 86 if the line could not be moved, or 1 if one of the required arguments is missing.
+
+=cut
+
 sub move_endpoint {
 	my ($self,$x,$y,$z) = @_;
     if ($self->{immobile}) {
@@ -432,12 +562,29 @@ sub move_endpoint {
 	return 0;
 }
 
+=item double({w,h},nx,ny)
+
+	Takes required arguments for width and height of allowed area, and optional arguments for minimum x and y.
+	Makes the Segment twice as long, if that fits in the given boundaries.
+	Returns result of move_endpoint.
+
+=cut
+
 sub double {
 	my ($self,$w,$h,$minx,$miny) = @_;
-	$self->stretch(2.0,$w,$h,$minx,$miny);
+	return $self->stretch(2.0,$w,$h,$minx,$miny);
 }
 
+=item double({F,w,h},nx,ny)
+
+	Takes required arguments for width and height of allowed area, and optional arguments for minimum x and y.
+	Multiplies the Segment length by F, if that fits in the given boundaries, or adjusts it so it does.
+	Returns result of move_endpoint.
+
+=cut
+
 sub stretch {
+	# TODO: Make an option to Segment->stretch() that will keep the slope intact if the new end is out of bounds
 	my ($self,$factor,$w,$h,$minx,$miny) = @_;
 	$minx = 0 if not defined $minx;
 	$miny = 0 if not defined $miny;
@@ -458,9 +605,12 @@ sub stretch {
 		if ($x < $minx) { $setx = $minx; } elsif ($x > $w) { $setx = $w; } # recheck in case the adjusted value is outside the boundaries.
 		if ($setx) { $x = $setx; } # This will mess up the line's slope, but it'll be within the given field.
 	}
-	$self->move_endpoint($x,$y);
+	my $rv = $self->move_endpoint($x,$y);
 	if (0) { printf("%d,%d\n",$self->ex(),$self->ey()); }
+	return $rv;
 }
+
+# TODO: Continue documentation
 
 sub move_origin_only {
 	my ($self,$x,$y,$z) = @_;
@@ -1049,6 +1199,8 @@ sub setCornerHeadings {
 	Given an azimuth (absolute bearing from 0=N), returns a list containing the slope of the line (or undef for vertical) and which edge the azimuth intersects N=0; W=3.
 	Use of this function to find an edge assumes that setCornerHeadings has previously been called with the size of your current field. If the corner headings have not been set, it will return "unknown" for the edge value.
 =cut
+
+# TODO: Make a Field package that stores field size and can be given as a metadatum to Segment and Vertex objects.
 sub slopeFromAzimuth {
 	my $az = shift;
 	$az = 0 if ($az == 360);
@@ -1228,4 +1380,7 @@ sub enableTermcolors {
 	$funcolor = Common::getColorsbyName("ltgreen");
 }
 
+=back
+
+=cut
 1;

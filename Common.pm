@@ -6,7 +6,7 @@ use warnings;
 package Common;
 
 use base 'Exporter';
-our @EXPORT = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest vary lineNo);
+our @EXPORT_OK = qw( findIn loadSeedsFrom selectWidth getColors getColorsbyName between nround findClosest vary lineNo);
 
 use List::Util qw( min max );
 use POSIX qw( floor );
